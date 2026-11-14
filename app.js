@@ -85,8 +85,8 @@ function gameCard(g) {
     (g.city && `In ${g.city} (stadium not posted)`) ||
     (g.host && `Home team: ${g.host} (stadium not posted)`) ||
     (known(g) ? "Location not posted yet" : "");
-  const watch = g.nfhs_url
-    ? `<a class="btn watch" href="${safeUrl(g.nfhs_url)}" target="_blank" rel="noopener">▶ Watch on NFHS Network</a>`
+  const watch = g.watch
+    ? `<a class="btn watch" href="${safeUrl(g.watch)}" target="_blank" rel="noopener">▶ Watch on NFHS Network</a>`
     : known(g)
       ? `<a class="btn" href="https://www.nfhsnetwork.com/search?query=${encodeURIComponent(g.teams[0].name)}" target="_blank" rel="noopener">Look for this game on NFHS</a>`
       : "";
