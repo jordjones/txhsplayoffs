@@ -17,17 +17,27 @@
   border: 2px solid var(--muted, #4a5b6a); border-radius: 10px; background: #fff; color: var(--ink, #14202b);
 }
 .map-summary { margin: 12px 0 8px; font-size: 1.05rem; min-height: 1.4em; }
+/* Texas is nearly square, so keep the map nearly square: it then fills with Texas and little else. */
+.map-stage { position: relative; }
 .map-canvas {
-  height: clamp(420px, 62vh, 760px); border: 2px solid var(--line, #c9d2da); border-radius: 12px;
+  aspect-ratio: 1.06 / 1; max-height: 80vh; max-width: min(100%, 84vh); margin-inline: auto;
+  border: 2px solid var(--line, #c9d2da); border-radius: 12px;
   background: #dfe8ee; display: flex; align-items: center; justify-content: center; color: var(--muted, #4a5b6a);
+}
+.map-empty {
+  position: absolute; z-index: 500; left: 50%; top: 16px; transform: translateX(-50%);
+  width: min(90%, 460px); margin: 0; padding: 14px 16px; font-size: 1.05rem; line-height: 1.4;
+  background: #fff; color: var(--ink, #14202b); border: 2px solid var(--brand, #12355b); border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 @media (min-width: 900px) {
   .map-controls { grid-template-columns: 1.3fr 1.3fr 1fr 1fr; }
   .map-seg { grid-column: auto; }
 }
 @media (max-width: 560px) {
-  .map-canvas { height: 70vh; }
+  .map-canvas { aspect-ratio: 0.88 / 1; max-height: 68vh; }
   #map-view .leaflet-popup-content { max-height: 48vh; overflow: auto; font-size: 0.95rem; margin: 12px 12px 10px; }
+  .pop-list { max-height: 30vh; }
   .pop-actions .btn { padding: 8px 10px; min-height: 42px; }
 }
 
@@ -35,8 +45,9 @@
 .map-legend span { display: inline-flex; align-items: center; gap: 10px; }
 .map-legend .mk { position: relative; width: 24px; height: 24px; font-size: 0.8rem; flex: none; }
 .map-missing { margin: 8px 0 16px; }
+.map-missing h3 { font-size: 1.05rem; margin: 10px 0 4px; }
 .map-missing summary { font-size: 1rem; padding: 10px 0; color: #0b4f9e; cursor: pointer; }
-.map-missing ul { list-style: none; margin: 0; padding: 0; }
+.map-missing ul { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
 .map-missing li { padding: 4px 0; }
 .map-missing button { width: 100%; text-align: left; font-size: 1rem; }
 .map-missing small { color: var(--muted, #4a5b6a); display: block; }
@@ -55,8 +66,14 @@
 .mk.out { background: #7d8790; }
 .mk.champ { background: #c98a00; }
 .mk.sel { box-shadow: 0 0 0 5px #ffd166, 0 2px 8px rgba(0, 0, 0, 0.5); }
-.mk.cluster { font-size: 1.1rem; }
-.mk.cluster.wide { font-size: 0.95rem; }
+.mk.stack { font-size: 1.1rem; }
+.mk.stack.wide { font-size: 0.95rem; }
+/* Swatches that match the school dots drawn on the map: solid = still playing, hollow = knocked out. */
+.mk.dot { background: #15509a; border-width: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.mk.dot.town { background: #8fb4de; }
+.mk.dot.out { background: #fff; border-color: #4a5b6a; }
+.mk.dot.out.town { background: #fff; opacity: 0.55; border-color: #96a3ad; }
+.mk.dot.champ { background: #b07c00; }
 @keyframes mk-pulse {
   0% { transform: scale(0.7); opacity: 1; }
   100% { transform: scale(1.5); opacity: 0; }
@@ -103,6 +120,7 @@
 .pop-teams b { font-size: 1.3rem; min-width: 2ch; text-align: right; }
 .pop-teams .won { color: var(--win, #0b5d2a); font-weight: 800; }
 .pop-travel { margin-top: 8px !important; }
+.pop-note { color: var(--muted, #4a5b6a); }
 .pop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .pop-actions .btn { padding: 10px 12px; font-size: 0.95rem; min-height: 46px; }
 .pop-head {
@@ -112,7 +130,7 @@
 .pop-head img { width: 48px; height: 48px; object-fit: contain; flex: none; }
 .pop-head b { font-size: 1.15rem; display: block; line-height: 1.2; }
 .pop-head span { color: var(--muted, #4a5b6a); }
-.pop-list { list-style: none; margin: 0; padding: 0; max-height: 45vh; overflow: auto; }
+.pop-list { list-style: none; margin: 0; padding: 0; max-height: 38vh; overflow: auto; }
 .pop-list li { border-top: 1px solid var(--line, #c9d2da); }
 .pop-list li:first-child { border-top: 0; }
 .pop-list button {
