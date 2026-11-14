@@ -101,11 +101,15 @@ const PERIODS = { Q1: "1st quarter", Q2: "2nd quarter", Half: "Halftime", Q3: "3
 const period = (p) => PERIODS[p] || p || "";
 
 function where(g) {
-  const town = g.town || g.city;
+  const town = g.town;
   if (town && g.stadium) return `${town} · ${g.stadium}`;
   if (town) return `${town} (stadium not posted)`;
   if (g.stadium) return g.stadium;
-  if (g.host) return `Home team: ${g.host} (stadium not posted)`;
+  if (g.host) {
+    const slot = g.teams.find((t) => t.name === g.host);
+    const home = slot && Object.values(state.data).map((b) => b.teams[slot.id]).find(Boolean);
+    return `Home team: ${g.host}${home?.city ? ` of ${home.city}` : ""} (stadium not posted)`;
+  }
   return known(g) ? "Location not posted yet" : "";
 }
 
