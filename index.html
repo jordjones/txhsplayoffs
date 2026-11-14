@@ -6,6 +6,7 @@
 <title>Texas High School Football Playoffs 2026</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="map.css">
 </head>
 <body>
 <header class="top">
@@ -20,16 +21,47 @@
     <ul id="results" class="results" hidden></ul>
   </section>
 
+  <h2 class="pick-h">Choose a bracket</h2>
+  <p class="pick-note">All twelve brackets are here: every class from 6A down to 1A six-man, Division I and Division II.</p>
   <nav id="brackets" class="brackets" aria-label="Choose a bracket"></nav>
 
   <section id="bracket" hidden>
     <div class="bracket-head">
       <h2 id="title"></h2>
-      <button id="view" class="plain" type="button"></button>
+      <div id="live-note"></div>
     </div>
-    <nav id="rounds" class="rounds" aria-label="Choose a round"></nav>
-    <div id="games"></div>
+
+    <nav id="views" class="views" aria-label="Choose a view">
+      <button type="button" data-view="rounds" aria-current="true">Rounds</button>
+      <button type="button" data-view="bracket" aria-current="false">Bracket</button>
+      <button type="button" data-view="map" aria-current="false">Texas map</button>
+    </nav>
+
+    <p class="legend">
+      <span class="st live"><i class="dot"></i>LIVE</span> being played now &nbsp;
+      <span class="st final">FINAL</span> finished, winner marked ✔ in green &nbsp;
+      <span class="st soon">7:30 PM</span> kickoff still ahead
+    </p>
+
+    <section id="rounds-view">
+      <nav id="rounds" class="rounds" aria-label="Choose a round"></nav>
+      <nav id="regions" class="regions" aria-label="Choose a region"></nav>
+      <div id="games"></div>
+    </section>
+
+    <section id="bracket-view" hidden>
+      <nav id="tabs" class="rounds" aria-label="Choose a part of the bracket"></nav>
+      <div id="tree-note" class="tree-note"></div>
+      <div class="tree-nav">
+        <button id="tree-prev" class="plain" type="button">◀ Earlier round</button>
+        <button id="tree-next" class="plain" type="button">Later round ▶</button>
+      </div>
+      <div id="tree" class="tree"></div>
+    </section>
   </section>
+
+  <section id="map-view" hidden></section>
+
   <p id="status" class="status">Loading the brackets…</p>
 </main>
 
@@ -39,8 +71,9 @@
   <p>Brackets, scores and team information come from <a href="https://www.maxpreps.com/tx/football/">MaxPreps</a>,
   the official bracket provider for the <a href="https://www.uiltexas.org/football/playoff-brackets">UIL</a>.
   Game video is on the <a href="https://www.nfhsnetwork.com">NFHS Network</a>, which requires its own subscription and sign-in.
-  Kickoff times are local to the stadium. This page checks for new scores on its own.</p>
+  Kickoff times are local to the stadium. This page checks for new scores on its own every few minutes.</p>
 </footer>
 <script src="app.js"></script>
+<script src="map.js" defer></script>
 </body>
 </html>

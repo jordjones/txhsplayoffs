@@ -1,0 +1,124 @@
+.map-controls {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 18px;
+}
+.map-seg {
+  grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr;
+  border: 2px solid var(--brand, #12355b); border-radius: 10px; overflow: hidden; background: #fff;
+}
+.map-seg button {
+  min-height: 54px; border: 0; background: #fff; color: var(--brand, #12355b);
+  font-weight: 700; font-size: 1.05rem; padding: 10px;
+}
+.map-seg button + button { border-left: 2px solid var(--brand, #12355b); }
+.map-seg button[aria-pressed="true"] { background: var(--brand, #12355b); color: #fff; }
+.map-field { display: flex; flex-direction: column; gap: 4px; font-weight: 700; }
+.map-field select {
+  font: inherit; font-size: 1.05rem; min-height: 54px; padding: 8px 12px; width: 100%;
+  border: 2px solid var(--muted, #4a5b6a); border-radius: 10px; background: #fff; color: var(--ink, #14202b);
+}
+.map-summary { margin: 12px 0 8px; font-size: 1.05rem; min-height: 1.4em; }
+.map-canvas {
+  height: clamp(420px, 62vh, 760px); border: 2px solid var(--line, #c9d2da); border-radius: 12px;
+  background: #dfe8ee; display: flex; align-items: center; justify-content: center; color: var(--muted, #4a5b6a);
+}
+@media (min-width: 900px) {
+  .map-controls { grid-template-columns: 1.3fr 1.3fr 1fr 1fr; }
+  .map-seg { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .map-canvas { height: 70vh; }
+  #map-view .leaflet-popup-content { max-height: 48vh; overflow: auto; font-size: 0.95rem; margin: 12px 12px 10px; }
+  .pop-actions .btn { padding: 8px 10px; min-height: 42px; }
+}
+
+.map-legend { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 12px 0 4px; }
+.map-legend span { display: inline-flex; align-items: center; gap: 10px; }
+.map-legend .mk { position: relative; width: 24px; height: 24px; font-size: 0.8rem; flex: none; }
+.map-missing { margin: 8px 0 16px; }
+.map-missing summary { font-size: 1rem; padding: 10px 0; color: #0b4f9e; cursor: pointer; }
+.map-missing ul { list-style: none; margin: 0; padding: 0; }
+.map-missing li { padding: 4px 0; }
+.map-missing button { width: 100%; text-align: left; font-size: 1rem; }
+.map-missing small { color: var(--muted, #4a5b6a); display: block; }
+
+.mk {
+  border-radius: 50%; border: 3px solid #fff; background: #1e63b5; color: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.05rem;
+}
+.mk.final { background: var(--win, #0b5d2a); }
+.mk.live { background: var(--accent, #b3261e); }
+.mk.live::after {
+  content: ""; position: absolute; inset: -7px; border-radius: 50%;
+  border: 3px solid var(--accent, #b3261e); animation: mk-pulse 1.6s ease-out infinite;
+}
+.mk.out { background: #7d8790; }
+.mk.champ { background: #c98a00; }
+.mk.sel { box-shadow: 0 0 0 5px #ffd166, 0 2px 8px rgba(0, 0, 0, 0.5); }
+.mk.cluster { font-size: 1.1rem; }
+.mk.cluster.wide { font-size: 0.95rem; }
+@keyframes mk-pulse {
+  0% { transform: scale(0.7); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .mk.live::after { animation: none; } }
+
+#map-view .leaflet-container { font: inherit; }
+#map-view .leaflet-container a { color: #0b4f9e; }
+#map-view .leaflet-bar a {
+  width: 48px; height: 48px; line-height: 48px; font-size: 28px; font-weight: 700; color: var(--ink, #14202b);
+}
+#map-view .leaflet-bar { border: 2px solid rgba(0, 0, 0, 0.35); }
+.map-reset {
+  font: inherit; font-weight: 700; font-size: 1rem; min-height: 48px; padding: 8px 14px; cursor: pointer;
+  background: #fff; color: var(--brand, #12355b); border: 2px solid var(--brand, #12355b); border-radius: 10px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+#map-view .leaflet-control-attribution { font-size: 0.8rem; }
+#map-view .mk-label {
+  font-weight: 700; font-size: 0.9rem; line-height: 1.2; color: var(--ink, #14202b);
+  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line, #c9d2da); border-radius: 6px;
+  padding: 3px 7px; box-shadow: none; white-space: nowrap;
+}
+#map-view .mk-label::before { display: none; }
+
+#map-view .leaflet-popup-content-wrapper { border-radius: 12px; }
+#map-view .leaflet-popup-content { margin: 14px 16px 12px; font-size: 1rem; line-height: 1.4; }
+#map-view .leaflet-popup-content p { margin: 0 0 8px; }
+#map-view .leaflet-popup-close-button {
+  width: 44px; height: 44px; font-size: 30px; line-height: 44px; top: 2px; right: 2px; padding: 0;
+  color: var(--ink, #14202b);
+}
+.pop-crumb { color: var(--muted, #4a5b6a); font-size: 0.9rem; margin-right: 36px !important; }
+.pop-where small { color: var(--muted, #4a5b6a); display: block; font-size: 0.85rem; font-weight: 400; }
+.pop-status { font-weight: 800; }
+.pop-status.live { color: var(--accent, #b3261e); }
+.pop-status.final { color: var(--win, #0b5d2a); }
+.pop-status.upcoming, .pop-status.alive { color: #1e63b5; }
+.pop-status.out { color: var(--muted, #4a5b6a); }
+.pop-teams div {
+  display: flex; justify-content: space-between; gap: 12px; padding: 6px 0;
+  border-top: 1px solid var(--line, #c9d2da); font-size: 1.1rem;
+}
+.pop-teams b { font-size: 1.3rem; min-width: 2ch; text-align: right; }
+.pop-teams .won { color: var(--win, #0b5d2a); font-weight: 800; }
+.pop-travel { margin-top: 8px !important; }
+.pop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pop-actions .btn { padding: 10px 12px; font-size: 0.95rem; min-height: 46px; }
+.pop-head {
+  display: flex; gap: 10px; align-items: center; border-left: 8px solid var(--brand, #12355b);
+  padding-left: 10px; margin: 0 36px 8px 0;
+}
+.pop-head img { width: 48px; height: 48px; object-fit: contain; flex: none; }
+.pop-head b { font-size: 1.15rem; display: block; line-height: 1.2; }
+.pop-head span { color: var(--muted, #4a5b6a); }
+.pop-list { list-style: none; margin: 0; padding: 0; max-height: 45vh; overflow: auto; }
+.pop-list li { border-top: 1px solid var(--line, #c9d2da); }
+.pop-list li:first-child { border-top: 0; }
+.pop-list button {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 8px 4px;
+  background: #fff; border: 0; text-align: left; font-size: 1rem; color: var(--ink, #14202b);
+}
+.pop-list .mk { position: relative; width: 20px; height: 20px; flex: none; }
+.pop-list .mk.live::after { display: none; }
+.pop-list small { color: var(--muted, #4a5b6a); display: block; }
