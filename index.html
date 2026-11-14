@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texas High School Football Playoffs 2026</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Texas High School Football Playoffs <span>2026</span></h1>
+  <p id="updated" class="updated"></p>
+</header>
+
+<main>
+  <section class="search">
+    <label for="q">Find a school</label>
+    <input id="q" type="search" placeholder="Type a school name" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+  </section>
+
+  <nav id="brackets" class="brackets" aria-label="Choose a bracket"></nav>
+
+  <section id="bracket" hidden>
+    <div class="bracket-head">
+      <h2 id="title"></h2>
+      <button id="view" class="plain" type="button"></button>
+    </div>
+    <nav id="rounds" class="rounds" aria-label="Choose a round"></nav>
+    <div id="games"></div>
+  </section>
+  <p id="status" class="status">Loading the brackets…</p>
+</main>
+
+<dialog id="panel"><button class="close" type="button" aria-label="Close">Close ✕</button><div id="panel-body"></div></dialog>
+
+<footer>
+  <p>Brackets, scores and team information come from <a href="https://www.maxpreps.com/tx/football/">MaxPreps</a>,
+  the official bracket provider for the <a href="https://www.uiltexas.org/football/playoff-brackets">UIL</a>.
+  Game video is on the <a href="https://www.nfhsnetwork.com">NFHS Network</a>, which requires its own subscription and sign-in.
+  Kickoff times are local to the stadium. This page checks for new scores on its own.</p>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
