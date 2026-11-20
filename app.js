@@ -5,27 +5,73 @@ const esc = (s) =>
 const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "#");
 
 const REGIONS = ["I", "II", "III", "IV"];
-const state = { index: null, data: {}, code: null, view: "rounds", round: null, region: "all", tab: "I", path: null, hit: null };
+const state = { index: null, live: null, docs: {}, teams: {}, teamsUpdated: null, data: {}, code: null, want: null, view: "rounds", round: null, region: "all", tab: "I", path: null, hit: null };
 const wide = matchMedia("(min-width: 900px)");
 
 async function getJSON(name) {
-  const r = await fetch(`data/${name}.json`, { cache: "no-store" });
+  const r = await fetch(`data/v1/football/2026/${name}.json`, { cache: "no-cache" });
   if (!r.ok) throw new Error(`${name}: ${r.status}`);
   return r.json();
 }
 
+const merge = (id, t) => (state.teams[id] = { ...state.teams[id], ...t });
+const loading = {};
+function loadComp(code) {
+  return (loading[code] ||= getJSON(`c/${code}`)
+    .then((doc) => {
+      state.docs[code] = doc;
+      Object.entries(doc.teams).forEach(([id, t]) => merge(id, t));
+      assemble(code);
+    })
+    .finally(() => delete loading[code]));
+}
+function loadTeams() {
+  return (loading.teams ||= getJSON("teams")
+    .then((doc) => {
+      Object.entries(doc.teams).forEach(([id, t]) => merge(id, t));
+      state.teamsUpdated = doc.updated;
+    })
+    .finally(() => delete loading.teams));
+}
+const loadTeam = (id) => getJSON(`t/${id}`).then((t) => merge(id, t));
+const loadComps = () => Promise.all(state.index.brackets.filter((b) => !state.data[b.code]).map((b) => loadComp(b.code)));
+const mapReady = () => state.teamsUpdated && state.index.brackets.every((b) => state.data[b.code]);
+
+// A live row marked final is authoritative over a competition file that has not caught up yet.
+function assemble(code) {
+  const doc = state.docs[code];
+  const rows = state.live.games;
+  const at = state.live.at ?? state.live.updated;
+  const before = Object.fromEntries((state.data[code]?.games || []).map((g) => [g.id, g]));
+  const games = doc.games.map(({ slots, ...g }) => {
+    const row = rows[g.id];
+    const kept = !g.final && !row?.final && before[g.id]?.final ? before[g.id] : null; // the live row expired before this competition file caught up
+    const final = g.final || !!row?.final || !!kept;
+    const teams = slots.map((s, i) => ({
+      id: s.team,
+      name: s.team ? doc.teams[s.team]?.name ?? "" : s.placeholder,
+      seed: s.seed,
+      score: (row?.final ? row.scores?.[s.team] ?? s.score : kept ? kept.teams[i].score : s.score) ?? null,
+      record: s.record,
+      url: s.team ? doc.teams[s.team]?.url ?? null : null,
+    }));
+    const live = row && !final ? { period: row.period, scores: teams.map((t) => row.scores?.[t.id] ?? null), at } : null;
+    return { ...g, teams, final, host: g.host ? doc.teams[g.host]?.name ?? null : null, live };
+  });
+  // Keys stay in index order whatever order the files arrive in: the map lists brackets in this order.
+  const data = { ...state.data, [code]: prepare({ code, label: doc.label, games, teams: state.teams }) };
+  state.data = Object.fromEntries(state.index.brackets.filter((b) => data[b.code]).map((b) => [b.code, data[b.code]]));
+}
+
 async function load() {
-  const index = await getJSON("index");
-  if (state.index && state.index.updated === index.updated) return false;
-  const files = await Promise.all(
-    index.brackets.map(async (b) => {
-      const [games, teams] = await Promise.all([getJSON(b.code), getJSON(b.code + "-teams").catch(() => ({}))]);
-      return { ...games, teams };
-    }),
-  );
-  index.brackets.forEach((b, i) => (state.data[b.code] = prepare(files[i])));
-  state.index = index;
-  return true;
+  const [index, live] = await Promise.all([getJSON("index"), getJSON("live").catch(() => state.live || { games: {} })]);
+  state.live = live;
+  state.index = { brackets: index.competitions, updated: new Date(live.updated) > new Date(index.updated) ? live.updated : index.updated };
+  await Promise.all([
+    ...index.competitions.filter((c) => state.docs[c.code] && state.docs[c.code].updated !== c.updated).map((c) => loadComp(c.code)),
+    state.teamsUpdated && state.teamsUpdated !== index.teams_updated && loadTeams(),
+  ]);
+  Object.keys(state.docs).forEach(assemble);
 }
 
 // Order rounds from first to last and games top-to-bottom as they sit in the bracket tree.
@@ -332,6 +378,9 @@ function render() {
   history.replaceState(null, "", hash());
   scrollTo(scrollX, y);
   $("#tree").scrollLeft = tx;
+  if (state.view === "map" && !mapReady()) {
+    Promise.allSettled([loadComps(), state.teamsUpdated || loadTeams()]).then(() => mapReady() && render());
+  }
   document.dispatchEvent(new CustomEvent("playoffs:render"));
 }
 
@@ -345,7 +394,7 @@ function hash() {
 }
 function applyHash() {
   const [code, view, sub] = location.hash.slice(1).split("/");
-  if (!state.data[code]) return false;
+  if (!state.index.brackets.some((b) => b.code === code)) return false;
   if (code !== state.code) {
     state.code = code;
     state.region = "all";
@@ -355,13 +404,14 @@ function applyHash() {
   if (["rounds", "bracket", "map"].includes(view)) state.view = view;
   if (sub && state.view === "bracket") state.tab = sub;
   if (sub && state.view === "rounds") state.region = sub;
-  pick(code);
-  return true;
+  return pick(code);
 }
 
-function pick(code, round, gameId) {
+async function pick(code, round, gameId) {
+  state.want = code;
+  if (!state.data[code]) await loadComp(code);
+  if (state.want !== code) return;
   const b = state.data[code];
-  if (!b) return;
   if (code !== state.code) {
     state.region = "all";
     state.tab = "I";
@@ -404,7 +454,7 @@ function teamPanel(id) {
   if (!b) return;
   const slot = games[0].teams.find((t) => t.id === id);
   const t = b.teams[id];
-  if (!t) {
+  if (!t.url) {
     return `<div class="team-head"><img src="${logo(id)}" alt=""><div><h2>${esc(slot.name)}</h2><p>${esc(b.label)}</p></div></div>
       <p>More details for this team have not been collected yet.</p>
       <p><a class="btn" href="${safeUrl(slot.url)}" target="_blank" rel="noopener">Team page on MaxPreps</a></p>`;
@@ -518,7 +568,8 @@ document.addEventListener("click", (e) => {
       state.path = el.dataset.team;
       render();
     }
-    return open(teamPanel(el.dataset.team));
+    const ask = (state.asked = el.dataset.team);
+    return loadTeam(ask).catch(() => {}).then(() => state.asked === ask && open(teamPanel(ask)));
   }
   const [b, g] = findGame(el.dataset.game);
   if (!g) return;
@@ -531,7 +582,10 @@ document.addEventListener("click", (e) => {
   open(gameCard(g));
 });
 $("#panel").addEventListener("click", (e) => e.target === $("#panel") && $("#panel").close());
-$("#q").addEventListener("input", (e) => search(e.target.value));
+$("#q").addEventListener("input", (e) => {
+  search(e.target.value);
+  Promise.allSettled([loadComps()]).then(() => search($("#q").value));
+});
 wide.addEventListener("change", () => state.code && render());
 addEventListener("hashchange", () => location.hash !== hash() && applyHash());
 
@@ -539,11 +593,11 @@ async function refresh() {
   try {
     await load();
     if (state.code) render();
-    else applyHash() || pick(state.index.brackets[0].code);
+    else await (applyHash() || pick(state.index.brackets[0].code));
   } catch (err) {
-    if (!state.index) $("#status").textContent = "The brackets could not be loaded. Please try again in a few minutes.";
+    if (!$("#status").hidden) $("#status").textContent = "The brackets could not be loaded. Please try again in a few minutes.";
   }
 }
 window.Playoffs = { state, status, gameCard, open, teamPanel, pick, where };
 refresh();
-setInterval(refresh, 5 * 60 * 1000);
+setInterval(refresh, 60 * 1000);
