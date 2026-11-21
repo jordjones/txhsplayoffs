@@ -136,12 +136,13 @@ function nowWall() {
 }
 function status(g) {
   if (g.final) return "final";
-  if (g.live) return "live";
-  if (!g.kickoff) return "upcoming";
+  return g.live ? "live" : "upcoming";
+}
+
+function kickoffPassed(g, now) {
+  if (!g.kickoff) return false;
   const [y, mo, d, h, mi] = parts(g.kickoff);
-  if (!h && !mi) return "upcoming";
-  const since = nowWall() - Date.UTC(y, mo - 1, d, h, mi);
-  return since >= 0 && since <= 4 * 3600e3 ? "live" : "upcoming";
+  return Boolean(h || mi) && Date.UTC(y, mo - 1, d, h, mi) <= now;
 }
 const PERIODS = { Q1: "1st quarter", Q2: "2nd quarter", Half: "Halftime", Q3: "3rd quarter", Q4: "4th quarter", OT: "Overtime" };
 const period = (p) => PERIODS[p] || p || "";
@@ -171,74 +172,156 @@ function seedShort(s) {
 }
 
 const logo = (id) => `https://image.maxpreps.io/school-mascot/${esc(id[0])}/${esc(id[1])}/${esc(id[2])}/${esc(id)}.gif?width=96&height=96&fit=bounds`;
+function schoolMark(team) {
+  const info = state.teams[team.id];
+  const color = /^[0-9a-f]{6}$/i.test(info?.color ?? "") ? `#${info.color}` : "#12355b";
+  const words = team.name.trim().split(/\s+/);
+  const initials = (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase();
+  return `<span class="school-mark" aria-hidden="true" style="--school-color:${color}"><span class="school-monogram">${esc(initials)}</span>
+    <img src="${info?.logo ? safeUrl(info.logo) : logo(team.id)}" alt="" loading="lazy" onload="this.classList.add('loaded')" onerror="this.hidden=true"></span>`;
+}
 const winner = (g) => (g.final && g.teams[0].score !== g.teams[1].score ? (g.teams[0].score > g.teams[1].score ? 0 : 1) : -1);
 const known = (g) => g.teams.every((t) => t.id);
 const scores = (g) => (!g.final && g.live && Array.isArray(g.live.scores) ? g.live.scores : g.teams.map((t) => t.score));
 const tbd = (name) => esc(String(name || "To be decided").replace(/^Winner G/, "Winner of Game "));
 const liveOnes = (b) => b.games.filter((g) => status(g) === "live");
 
-function badge(g, st) {
-  if (st === "live") return `<span class="st live"><i class="dot"></i>LIVE${g.live?.period ? ` · ${esc(period(g.live.period))}` : ""}</span>`;
-  if (st === "final") return `<span class="st final">FINAL</span>`;
-  return `<span class="st soon">UPCOMING</span>`;
+function badge(g, st, pastKickoff) {
+  if (st === "live") return `<span class="match-status live"><i class="dot" aria-hidden="true"></i>Live${g.live?.period ? ` · ${esc(period(g.live.period))}` : ""}</span>`;
+  if (st === "final") return `<span class="match-status final">Final</span>`;
+  return `<span class="match-status upcoming">${pastKickoff ? "Score pending" : esc(shortWhen(g.kickoff))}</span>`;
 }
 
 function teamRow(t, won, score) {
   if (!t.id) return `<div class="team"><span class="tbd">${tbd(t.name)}</span></div>`;
   return `<div class="team${won ? " won" : ""}">
-    <img src="${logo(t.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-    <button class="name" type="button" data-team="${esc(t.id)}">${won ? "✔ " : ""}${esc(t.name)}${t.record ? ` <small>(${esc(t.record)})</small>` : ""}</button>
-    ${won ? '<span class="wonword">WINNER</span>' : `<span class="seed">${seed(t.seed)}</span>`}
+    ${schoolMark(t)}
+    <button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}${t.record ? ` <small>(${esc(t.record)})</small>` : ""}</button>
+    ${won ? '<span class="wonword"><span aria-hidden="true">✓</span><span class="visually-hidden">Winner</span></span>' : ""}
+    <span class="seed">${esc(seedShort(t.seed))}</span>
     <span class="score">${score ?? ""}</span>
   </div>`;
 }
 
-function gameCard(g) {
+function gameCard(g, now = nowWall()) {
   const st = status(g);
-  const w = winner(g);
+  const pastKickoff = st === "upcoming" && kickoffPassed(g, now);
   const sc = scores(g);
+  const w = sc.every(Number.isFinite) ? winner(g) : -1;
+  const matchup = g.teams.map((t) => t.name).filter(Boolean).join(" vs. ");
+  const place = where(g);
   const nfhs = g.watch
-    ? `<a class="btn${st === "live" ? " watch" : ""}" href="${safeUrl(g.watch)}" target="_blank" rel="noopener">▶ ${st === "live" ? "Watch live on NFHS Network" : "Watch on NFHS Network"}</a>`
+    ? `<a href="${safeUrl(g.watch)}" target="_blank" rel="noopener" aria-label="Watch · NFHS Network · ${esc(matchup)}">Watch · NFHS</a>`
     : known(g) && st !== "final"
-      ? `<a class="btn" href="https://www.nfhsnetwork.com/search?query=${encodeURIComponent(g.teams[0].name)}" target="_blank" rel="noopener">Look for this game on NFHS</a>`
+      ? `<a href="https://www.nfhsnetwork.com/search?query=${encodeURIComponent(g.teams[0].name)}" target="_blank" rel="noopener" aria-label="Find · NFHS Network · ${esc(matchup)}">Find · NFHS</a>`
       : "";
-  const mpLabel = st === "live" ? (g.live_scoring ? "Live score on MaxPreps" : "Live updates on MaxPreps") : st === "final" ? "Game summary on MaxPreps" : "Game page on MaxPreps";
-  const mp = g.game_url ? `<a class="btn${st === "live" ? " updates" : ""}" href="${safeUrl(g.game_url)}" target="_blank" rel="noopener">${mpLabel}</a>` : "";
-  const note =
-    st !== "live"
-      ? ""
-      : g.live
-        ? `<p class="note">Live score from MaxPreps${g.live.at ? `, as of ${esc(clock(g.live.at))}` : ""}.</p>`
-        : `<p class="note">Kickoff was ${esc(clock(g.kickoff))}. The live score has not been posted yet.</p>`;
-  return `<article class="game ${st}${state.hit === g.id ? " hit" : ""}" id="g-${esc(g.id)}">
-    <div class="head"><span>${esc(g.num.replace("G", "Game "))} · ${esc(g.round)}${g.region ? ` · Region ${esc(g.region)}` : ""}</span>${badge(g, st)}</div>
-    <div class="meta"><span>${esc(when(g.kickoff))}</span><span class="where">${esc(where(g))}</span></div>
-    ${g.teams.map((t, i) => teamRow(t, i === w, sc[i])).join("")}
-    ${nfhs || mp ? `<div class="actions">${nfhs}${mp}</div>` : ""}${note}
+  const mpLabel = st === "live" ? (g.live_scoring ? "Live score" : "Updates") : st === "final" ? "Recap" : "Preview";
+  const mp = g.game_url ? `<a href="${safeUrl(g.game_url)}" target="_blank" rel="noopener" aria-label="${mpLabel} · MaxPreps · ${esc(matchup)}">${mpLabel} · MaxPreps</a>` : "";
+  const note = st === "live"
+    ? sc.some(Number.isFinite)
+      ? `<span class="score-note">${g.live?.at ? `As of ${esc(clock(g.live.at))} CT` : "Live score"}</span>`
+      : '<span class="score-note">Score pending</span>'
+    : "";
+  return `<article class="game desk-game ${st}${state.hit === g.id ? " hit" : ""}" id="g-${esc(g.id)}">
+    <div class="head"><span>${esc(g.num.replace("G", "Game "))} · ${esc(g.round)}${g.region ? ` · Region ${esc(g.region)}` : ""}</span>${badge(g, st, pastKickoff)}</div>
+    <div class="matchup">${g.teams.map((t, i) => teamRow(t, i === w, sc[i])).join("")}</div>
+    ${place ? `<div class="place"><span class="where">${esc(place)}</span></div>` : ""}
+    ${nfhs || mp || note ? `<div class="provider-links">${nfhs}${mp}${note}</div>` : ""}
+    ${(st !== "upcoming" || pastKickoff) && g.kickoff ? `<div class="game-kickoff">Kickoff ${esc(when(g.kickoff))}</div>` : ""}
   </article>`;
 }
 
-function cell(g, style) {
+const bracketPicks = new Map();
+let lastBracketPick;
+let treeSection;
+
+const slotFeeder = (t, game, byNumber) => {
+  const source = !t.id && byNumber.get(/^Winner (G\d+)$/i.exec(t.name)?.[1].toUpperCase());
+  return source && source.next === game.id ? source : null;
+};
+
+function projectedTeams(b) {
+  const gamesByNumber = new Map(b.games.map((g) => [g.num, g]));
+  const advancing = new Map();
+  return new Map(b.games.map((g) => {
+    const teams = g.teams.map((t) => {
+      if (t.id) return t;
+      const source = slotFeeder(t, g, gamesByNumber);
+      const projected = source && advancing.get(source.id);
+      return projected || t;
+    });
+    const pick = teams.find((t) => t.id && t.id === bracketPicks.get(g.id));
+    if (!g.final && pick) advancing.set(g.id, { ...pick, hypothetical: true });
+    else {
+      bracketPicks.delete(g.id);
+      const actual = g.teams[winner(g)];
+      if (actual?.id) advancing.set(g.id, actual);
+    }
+    return [g.id, teams];
+  }));
+}
+
+function forecastRoute(b, projected) {
+  const start = lastBracketPick?.code === b.code && b.games.find((g) => g.id === lastBracketPick.game);
+  const team = start && projected.get(start.id).find((t) => t.id === bracketPicks.get(start.id));
+  if (!team) return "";
+  const byId = new Map(b.games.map((g) => [g.id, g]));
+  const byNumber = new Map(b.games.map((g) => [g.num, g]));
+  function options(slot, game) {
+    if (slot.id) return [slot];
+    const source = slotFeeder(slot, game, byNumber);
+    if (!source) return [];
+    const slots = projected.get(source.id);
+    const priorWinner = source.final ? slots[winner(source)] : slots.find((t) => t.id === bracketPicks.get(source.id));
+    if (priorWinner?.id) return [priorWinner];
+    return slots.flatMap((t) => options(t, source));
+  }
+  function opponentText(slot, game) {
+    if (slot.id) return esc(slot.name);
+    const candidates = [...new Map(options(slot, game).map((t) => [t.id, t.name])).values()];
+    const listed = candidates.slice(0, 4).map(esc).join(" / ");
+    const more = candidates.length > 4 ? ` +${candidates.length - 4} more` : "";
+    return tbd(slot.name) + (listed ? ` (${listed}${more})` : "");
+  }
+  const route = [];
+  for (let feeder = start, game = byId.get(start.next); game; feeder = game, game = byId.get(game.next)) {
+    const teams = projected.get(game.id);
+    const slot = game.teams.findIndex((t) => t.id === team.id || (!t.id && t.name === `Winner ${feeder.num}`));
+    const opponents = slot < 0 ? teams.filter((t) => t.id !== team.id) : [teams[1 - slot]];
+    const label = opponents.map((t) => opponentText(t, game)).join(" or ");
+    route.push(`<li><b>${esc(game.round)}</b> ${label}</li>`);
+    if (game.final && game.teams[winner(game)]?.id !== team.id) break;
+  }
+  return `<div class="forecast-route" aria-live="polite"><strong>Possible path for ${esc(team.name)}</strong>
+    ${route.length ? `<ol>${route.join("")}</ol>` : "<span> Championship pick</span>"}</div>`;
+}
+
+function cell(g, style, teams) {
   const st = status(g);
-  const w = winner(g);
   const sc = scores(g);
+  const w = sc.every(Number.isFinite) ? winner(g) : -1;
+  const gameLabel = g.num.replace("G", "Game ");
   const row = (t, i) =>
     t.id
-      ? `<div class="row${i === w ? " won" : ""}"><img src="${logo(t.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div class="who"><button class="name" type="button" data-team="${esc(t.id)}">${i === w ? "✔ " : ""}${esc(t.name)}</button>
-        <small>${[t.record, seedShort(t.seed)].filter(Boolean).map(esc).join(" · ")}</small></div><b class="pts">${sc[i] ?? ""}</b></div>`
+      ? `<div class="row${i === w ? " won" : ""}"${t.hypothetical ? " data-pick-projected" : ""}>
+        ${schoolMark(t)}
+        <div class="who"><button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}</button></div>
+        ${sc[i] == null ? "" : `<b class="pts">${sc[i]}</b>`}
+        ${i === w ? '<span class="visually-hidden">Winner</span>' : ""}
+        ${g.final ? "" : `<button class="pick-winner" type="button" data-pick-winner="${esc(g.id)}" data-pick-team="${esc(t.id)}"
+          aria-label="Pick ${esc(t.name)} to win ${esc(gameLabel)}" aria-pressed="${bracketPicks.get(g.id) === t.id}">↗</button>`}</div>`
       : `<div class="row"><span class="tbd">${tbd(t.name)}</span></div>`;
   const tag = st === "live" ? `<span class="st live"><i class="dot"></i>LIVE${g.live?.period ? ` · ${esc(g.live.period)}` : ""}</span>` : st === "final" ? `<span class="st final">FINAL</span>` : `<span class="st soon">${esc(shortWhen(g.kickoff))}</span>`;
   const cls = ["cell", st, state.hit === g.id ? "hit" : "", state.path && g.teams.some((t) => t.id === state.path) ? "path" : ""].filter(Boolean).join(" ");
   return `<div class="${cls}" id="g-${esc(g.id)}" data-game="${esc(g.id)}" style="${style}">
-    <div class="tag"><span class="gnum">${esc(g.num.replace("G", "Game "))}</span>${tag}</div>
-    ${g.teams.map(row).join("")}
-    <div class="foot"><span class="town">${esc(g.town || g.city || g.stadium || "")}</span><button class="more" type="button" data-game="${esc(g.id)}">Details</button></div>
+    <button class="tag" type="button" tabindex="-1" aria-label="Open ${esc(gameLabel)}"><span class="gnum">${esc(gameLabel)}</span>${tag}</button>
+    ${teams.map(row).join("")}
+    <div class="foot"><span class="town">${esc(g.town || g.city || g.stadium || "")}</span><button class="more" type="button" data-game="${esc(g.id)}" aria-label="Details for ${esc(gameLabel)}">Details <span aria-hidden="true">›</span></button></div>
   </div>`;
 }
 
 // A connected bracket: one grid, rounds in alternating cell/gap columns, two grid rows per first-round game.
-function grid(b, games, compact) {
+function grid(b, games, compact, projected) {
   const rounds = b.rounds.filter((r) => games.some((g) => g.round === r));
   const byRound = rounds.map((r) => games.filter((g) => g.round === r));
   const pos = new Map();
@@ -257,10 +340,10 @@ function grid(b, games, compact) {
     });
   });
   const n = Math.max(...[...pos.values()].map((p) => p.row + p.span)) - 2;
-  const heads = rounds.map((r, k) => `<h3 style="grid-column:${2 * k + 1};grid-row:1">${esc(r)}<small>${byRound[k].length} ${byRound[k].length === 1 ? "game" : "games"}</small></h3>`);
+  const heads = rounds.map((r, k) => `<h3 data-tree-round="${esc(r)}" style="grid-column:${2 * k + 1};grid-row:1">${esc(r)}<small>${byRound[k].length} ${byRound[k].length === 1 ? "game" : "games"}</small></h3>`);
   const cells = games.map((g) => {
     const p = pos.get(g.id);
-    return cell(g, `grid-column:${2 * rounds.indexOf(g.round) + 1};grid-row:${p.row} / span ${p.span}`);
+    return cell(g, `grid-column:${2 * rounds.indexOf(g.round) + 1};grid-row:${p.row} / span ${p.span}`, projected.get(g.id));
   });
   const links = games
     .filter((g) => rounds.indexOf(g.round) > 0 && fed(g).length)
@@ -278,14 +361,42 @@ const stateName = (b, r) => (b.stateRounds.indexOf(r) === b.stateRounds.length -
 const current = (yes) => `aria-current="${yes ? "true" : "false"}"`;
 const liveDot = (n) => (n ? ` <i class="dot" aria-hidden="true"></i> ${n} live` : "");
 
-function renderRounds(b, live) {
-  if (state.round === "live" && !live.length) state.round = defaultRound(b);
-  if (!b.rounds.includes(state.round) && state.round !== "live") state.round = defaultRound(b);
+function renderRounds(b) {
+  const competitions = b ? [b] : Object.values(state.data);
+  const rounds = [...new Set(competitions.flatMap((competition) => competition.rounds))];
+  const games = competitions.flatMap((competition) => competition.games);
+  const live = games.filter((g) => status(g) === "live");
+  const defaultView = b ? defaultRound(b) : "current";
+  if (state.round === "live" && !live.length) state.round = defaultView;
+  const tabs = b ? [...rounds, "all"] : ["current", ...rounds, "all"];
+  if (state.round !== "live" && !tabs.includes(state.round)) state.round = defaultView;
+  const roundLabel = (round) => ({ live: "Live now", current: "Current rounds", all: "All rounds" })[round] || round;
+  const stages = state.round === "current" ? new Set(competitions.map(defaultRound)) : new Set();
+  const activeRound = stages.size === 1 ? stages.values().next().value : state.round;
+  $("#round-title").textContent = roundLabel(activeRound);
+  const roundIndex = rounds.indexOf(activeRound);
+  for (const [id, index, arrow] of [["#round-prev", roundIndex - 1, "‹"], ["#round-next", roundIndex + 1, "›"]]) {
+    const control = $(id);
+    const round = roundIndex >= 0 ? rounds[index] : null;
+    control.hidden = !round;
+    if (round) {
+      control.dataset.round = round;
+      const label = roundLabel(round);
+      control.textContent = id === "#round-prev" ? `${arrow} ${label}` : `${label} ${arrow}`;
+    }
+  }
   $("#rounds").innerHTML =
     (live.length ? `<button class="livebtn" type="button" data-round="live" ${current(state.round === "live")}><i class="dot"></i>Live now (${live.length})</button>` : "") +
-    b.rounds.map((r) => `<button type="button" data-round="${esc(r)}" ${current(r === state.round)}>${esc(r)}${liveDot(live.filter((g) => g.round === r).length)}</button>`).join("");
-  const regional = state.round === "live" || !b.stateRounds.includes(state.round);
-  let list = state.round === "live" ? live : b.games.filter((g) => g.round === state.round);
+    tabs.map((r) => `<button type="button" data-round="${esc(r)}" ${current(r === activeRound)}>${esc(roundLabel(r))}${liveDot(live.filter((g) => g.round === r).length)}</button>`).join("");
+  const regional = !b || state.round === "live" || !b.stateRounds.includes(state.round);
+  let list = state.round === "all" ? games : games.filter((g) => g.round === state.round);
+  if (state.round === "live") list = live;
+  if (state.round === "current") {
+    list = competitions.flatMap((competition) => {
+      const round = defaultRound(competition);
+      return competition.games.filter((g) => g.round === round && known(g));
+    });
+  }
   const present = REGIONS.filter((r) => list.some((g) => g.region === r));
   $("#regions").hidden = !regional || !present.length;
   if (regional && present.length) {
@@ -295,17 +406,27 @@ function renderRounds(b, live) {
       present.map((r) => `<button type="button" data-region="${r}" ${current(r === state.region)}>Region ${r}${liveDot(list.filter((g) => g.region === r && status(g) === "live").length)}</button>`).join("");
     if (state.region !== "all") list = list.filter((g) => g.region === state.region);
   }
-  const groups = new Map();
-  list.forEach((g) => {
-    const key = g.region ? `Region ${g.region}` : stateName(b, g.round);
-    (groups.get(key) || groups.set(key, []).get(key)).push(g);
-  });
+  const now = nowWall();
+  const groups = { live: [], upcoming: [], final: [] };
+  list.forEach((g) => groups[status(g)].push(g));
+  const competitionSections = Object.fromEntries(competitions.map((competition) => [competition.code, new Set(competition.games)]));
+  const cards = (games) => `<div class="game-cards">${games.map((g) => gameCard(g, now)).join("")}</div>`;
+  const displayGames = (games) => b ? cards(games) : competitions.map(({ code, label }) => {
+    const sectionGames = games.filter((g) => competitionSections[code].has(g));
+    return sectionGames.length ? `<section data-competition="${esc(code)}"><h4 class="scoreboard-competition">${esc(label)}</h4>${cards(sectionGames)}</section>` : "";
+  }).join("");
+  const labels = {
+    live: "Live now",
+    upcoming: groups.upcoming.some((g) => kickoffPassed(g, now)) ? "Upcoming or score pending" : "Upcoming",
+    final: "Final",
+  };
   $("#games").innerHTML = list.length
-    ? [...groups]
-        .map(([name, gs]) => {
-          const n = gs.filter((g) => status(g) === "live").length;
-          return `<h3 class="region-h">${esc(name)}<small>${gs.length} ${gs.length === 1 ? "game" : "games"}${n ? ` · ${n} live now` : ""}</small></h3>${gs.map(gameCard).join("")}`;
-        })
+    ? Object.entries(groups)
+        .filter(([, games]) => games.length)
+        .map(([statusKey, games]) => `<section class="game-column" data-status="${statusKey}" aria-labelledby="games-${statusKey}">
+          <h3 id="games-${statusKey}">${labels[statusKey]} <small>${games.length} ${games.length === 1 ? "game" : "games"}</small></h3>
+          ${displayGames(games)}
+        </section>`)
         .join("")
     : `<p class="empty">No games to show here.</p>`;
 }
@@ -313,7 +434,7 @@ function renderRounds(b, live) {
 function renderTree(b, live) {
   const present = REGIONS.filter((r) => b.games.some((g) => g.region === r));
   const tabs = [...present.map((r) => [r, `Region ${r}`]), ["state", "State"]];
-  if (wide.matches) tabs.push(["all", "Whole bracket"]);
+  tabs.push(["all", "Whole bracket"]);
   if (!tabs.some(([k]) => k === state.tab)) state.tab = tabs[0][0];
   $("#tabs").innerHTML = tabs
     .map(([k, label]) => {
@@ -321,19 +442,32 @@ function renderTree(b, live) {
       return `<button type="button" data-tab="${k}" ${current(k === state.tab)}>${label}${liveDot(n)}</button>`;
     })
     .join("");
-  const games = state.tab === "all" ? b.games : state.tab === "state" ? b.games.filter((g) => !g.region) : b.games.filter((g) => g.region === state.tab);
-  const first = games.filter((g) => g.round === b.rounds.find((r) => games.some((x) => x.round === r)));
-  const intro =
-    state.tab === "all"
-      ? `All ${games.length} games, first round on the left and the state championship on the right.`
-      : state.tab === "state"
-        ? "The four regional champions meet here. Winners of the semifinals play for the state title."
-        : `${first.length * 2} teams. The winner of the last game on the right is the Region ${state.tab} champion and goes to the state semifinals.`;
+  const regional = REGIONS.includes(state.tab);
+  const feederGames = new Set(b.games.filter((g) => g.region === state.tab));
+  if (regional) {
+    const byId = new Map(b.games.map((g) => [g.id, g]));
+    for (const g of feederGames) {
+      const next = byId.get(g.next);
+      if (next) feederGames.add(next);
+    }
+  }
+  const games = b.games.filter((g) => state.tab === "all" || (regional ? feederGames.has(g) : !g.region));
+  const projected = projectedTeams(b);
+  const intro = regional ? `Region ${state.tab} through the state final` : state.tab === "state" ? "State semifinals and championship" : "Whole tournament";
   const team = state.path && b.teams[state.path]?.name || (state.path && b.games.flatMap((g) => g.teams).find((t) => t.id === state.path)?.name);
   $("#tree-note").innerHTML =
+    `<strong>${esc(intro)}</strong><span>Tap ↗ to pick a possible winner.</span>` +
+    (b.games.some((g) => bracketPicks.has(g.id)) ? '<button class="clear-forecast" type="button" data-clear-picks>Clear picks</button>' : "") +
     (team ? `<span class="pathbar">${esc(team)}'s games are highlighted <button class="plain" type="button" data-clear-path="1">Clear</button></span>` : "") +
-    `<span>${esc(intro)}${wide.matches ? "" : " Swipe sideways or use the buttons to move between rounds."}</span>`;
-  $("#tree").innerHTML = games.length ? grid(b, games, state.tab === "all") : `<p class="empty">No games to show here.</p>`;
+    forecastRoute(b, projected);
+  const tree = $("#tree");
+  tree.innerHTML = games.length ? grid(b, games, state.tab === "all", projected) : `<p class="empty">No games to show here.</p>`;
+  const section = `${b.code}/${state.tab}`;
+  if (treeSection === section) return null;
+  treeSection = section;
+  const first = b.rounds.find((round) => games.some((g) => g.round === round && !g.final));
+  const heading = first && tree.querySelector(`[data-tree-round="${CSS.escape(first)}"]`);
+  return wide.matches || !heading ? 0 : heading.offsetLeft - tree.offsetLeft;
 }
 
 function defaultRound(b) {
@@ -342,42 +476,51 @@ function defaultRound(b) {
 
 function render() {
   const { index, data } = state;
-  const confs = {};
-  index.brackets.forEach((b) => (confs[b.label.replace(/ Division.*/, "")] ||= []).push(b));
-  $("#brackets").innerHTML = Object.entries(confs)
-    .map(
-      ([conf, list]) =>
-        `<div class="conf"><b>${esc(conf.replace(" Six-Man", ""))}${/Six-Man/.test(conf) ? "<small>six-man</small>" : ""}</b>${list
-          .map((b) => `<button class="pick" type="button" data-code="${esc(b.code)}" ${current(b.code === state.code)}>${esc(b.label.replace(/.*(Division)/, "$1"))}</button>`)
-          .join("")}</div>`,
-    )
-    .join("");
-  $("#updated").textContent =
-    "Scores last updated " +
-    new Date(index.updated).toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) +
-    " Central";
-
+  const focused = document.activeElement;
+  const focusKey = ["code", "round", "region", "tab"].find((key) => focused?.dataset[key]);
   const b = data[state.code];
-  $("#bracket").hidden = !b;
+  $("#brackets").hidden = state.view === "map";
+  $("#brackets [data-code='all']").hidden = state.view === "bracket";
+  $("#brackets [data-code='all']").setAttribute("aria-current", String(!b));
+  $("#title").textContent = b?.label ?? "Statewide scoreboard";
+  $("#competition-choices").innerHTML = index.brackets.filter((_, i) => i % 2 === 0).map((divisionOne, i) => {
+    const className = divisionOne.code.slice(0, 2);
+    const pair = index.brackets.slice(i * 2, i * 2 + 2);
+    return `<div class="competition-class"><b>${esc(className)}${className === "1A" ? '<small> Six-man</small>' : ""}</b>
+      <div>${pair.map((entry, division) => `<button type="button" data-code="${esc(entry.code)}" aria-label="${esc(entry.label)}" ${current(entry.code === state.code)}>${division === 0 ? "I" : "II"}</button>`).join("")}</div></div>`;
+  }).join("");
+  $("#updated").textContent =
+    "Updated " +
+    new Date(index.updated).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) +
+    " CT";
+
+  $("#bracket").hidden = state.view === "map";
+  $("#views").hidden = false;
+  $("#q").disabled = false;
   $("#status").hidden = true;
-  if (!b) return;
   const y = scrollY;
   const tx = $("#tree").scrollLeft;
-  const live = liveOnes(b);
-  $("#title").textContent = b.label;
-  $("#live-note").innerHTML = live.length
-    ? `<button class="livebtn" type="button" data-round="live" data-view="rounds"><i class="dot"></i>${live.length} ${live.length === 1 ? "game" : "games"} live now</button>`
-    : "";
+
   document.querySelectorAll("#views button").forEach((el) => el.setAttribute("aria-current", el.dataset.view === state.view));
   $("#rounds-view").hidden = state.view !== "rounds";
   $("#bracket-view").hidden = state.view !== "bracket";
   $("#map-view").hidden = state.view !== "map";
+  $(".legend").hidden = state.view === "map";
   $("main").classList.toggle("wide", state.view === "bracket" && wide.matches);
-  if (state.view === "rounds") renderRounds(b, live);
-  if (state.view === "bracket") renderTree(b, live);
-  history.replaceState(null, "", hash());
+  if (state.view === "rounds") renderRounds(b);
+  const nextTreePosition = state.view === "bracket" && b ? renderTree(b, liveOnes(b)) : null;
+  if (state.view !== "bracket") treeSection = null;
+  if (focusKey && !focused.isConnected) {
+    const selector = `[data-${focusKey}="${CSS.escape(focused.dataset[focusKey])}"]`;
+    const scope = focusKey === "round" ? $("#rounds") : document;
+    scope.querySelector(selector)?.focus({ preventScroll: true });
+  } else if (focused?.matches(".round-head button[hidden]")) {
+    $("#rounds [aria-current='true']")?.focus({ preventScroll: true });
+  }
+  history.replaceState(null, "", hash() || location.pathname + location.search);
   scrollTo(scrollX, y);
-  $("#tree").scrollLeft = tx;
+  $("#tree").scrollLeft = nextTreePosition ?? tx;
+  if (state.view === "bracket") updateTreeNavigation();
   if (state.view === "map" && !mapReady()) {
     Promise.allSettled([loadComps(), state.teamsUpdated || loadTeams()]).then(() => mapReady() && render());
   }
@@ -385,31 +528,35 @@ function render() {
 }
 
 function hash() {
-  const sub = state.view === "bracket" ? state.tab : state.view === "rounds" ? state.region : "";
+  if (state.view === "map") return state.code ? `#${state.code}/map` : "#map";
+  const sub = state.view === "bracket" ? state.tab : state.region;
   const dflt = state.view === "bracket" ? "I" : "all";
+  if (!state.code) return sub === dflt ? "" : `#all/rounds/${sub}`;
   const p = [state.code];
   if (state.view !== "rounds" || sub !== dflt) p.push(state.view);
   if (sub && sub !== dflt) p.push(sub);
   return "#" + p.join("/");
 }
+
+function setMapCode(code) {
+  state.code = code;
+  history.replaceState(null, "", hash());
+}
+
 function applyHash() {
   const [code, view, sub] = location.hash.slice(1).split("/");
-  if (!state.index.brackets.some((b) => b.code === code)) return false;
-  if (code !== state.code) {
-    state.code = code;
-    state.region = "all";
-    state.tab = "I";
-    state.path = null;
-  }
-  if (["rounds", "bracket", "map"].includes(view)) state.view = view;
-  if (sub && state.view === "bracket") state.tab = sub;
-  if (sub && state.view === "rounds") state.region = sub;
-  return pick(code);
+  const knownCode = state.index.brackets.some((b) => b.code === code) ? code : null;
+  state.view = code === "map" || view === "map" ? "map" : knownCode && view === "bracket" ? "bracket" : "rounds";
+  state.code = knownCode;
+  state.region = state.view === "rounds" ? sub || "all" : "all";
+  state.tab = state.view === "bracket" ? sub || "I" : "I";
+  state.path = null;
+  return pick(knownCode);
 }
 
 async function pick(code, round, gameId) {
   state.want = code;
-  if (!state.data[code]) await loadComp(code);
+  if (code && !state.data[code]) await loadComp(code);
   if (state.want !== code) return;
   const b = state.data[code];
   if (code !== state.code) {
@@ -418,19 +565,28 @@ async function pick(code, round, gameId) {
     state.path = null;
   }
   state.code = code;
-  state.round = round || (state.round === "live" && liveOnes(b).length ? "live" : defaultRound(b));
+  if (state.view === "bracket" && code) state.bracketCode = code;
+  if (state.view === "rounds") state.gamesCode = code;
+  const defaultView = b ? defaultRound(b) : "current";
+  state.round = round || (b && state.round === "live" && liveOnes(b).length ? "live" : defaultView);
   state.hit = gameId || null;
   if (gameId) {
     const g = b.games.find((x) => x.id === gameId);
     if (state.view === "bracket") state.tab = g?.region || "state";
     else {
       state.view = "rounds";
+      state.gamesCode = code;
       state.region = "all";
       state.round = g?.round || state.round;
     }
   }
   render();
-  if (gameId) document.getElementById("g-" + gameId)?.scrollIntoView({ block: "center", inline: "center" });
+  const target = gameId && document.getElementById("g-" + gameId);
+  if (target) {
+    target.tabIndex = -1;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "center", inline: "center" });
+  }
 }
 
 function findGame(id) {
@@ -454,10 +610,10 @@ function teamPanel(id) {
   if (!b) return;
   const slot = games[0].teams.find((t) => t.id === id);
   const t = b.teams[id];
-  if (!t.url) {
-    return `<div class="team-head"><img src="${logo(id)}" alt=""><div><h2>${esc(slot.name)}</h2><p>${esc(b.label)}</p></div></div>
+  if (!t?.url) {
+    return `<div class="team-head">${schoolMark(slot)}<div><h2>${esc(slot.name)}</h2><p>${esc(b.label)}</p></div></div>
       <p>More details for this team have not been collected yet.</p>
-      <p><a class="btn" href="${safeUrl(slot.url)}" target="_blank" rel="noopener">Team page on MaxPreps</a></p>`;
+      ${slot.url ? `<p><a class="btn" href="${safeUrl(slot.url)}" target="_blank" rel="noopener">Team page on MaxPreps</a></p>` : ""}`;
   }
   const fact = (k, v) => (v || v === 0 ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : "");
   const staff = t.staff || [];
@@ -477,7 +633,7 @@ function teamPanel(id) {
         <td>${day(s.date)}</td>
         <td>${s.site === "away" ? "at" : "vs"} ${esc(s.opponent || "To be decided")}
           ${s.playoff ? "<small>Playoff game</small>" : ""}${s.stadium ? `<small>${esc(s.stadium)}</small>` : ""}
-          ${bracketGame ? `<button class="plain" type="button" data-game="${esc(bracketGame.id)}" data-go="1">Show in bracket</button>` : ""}</td>
+          ${bracketGame ? `<button class="plain" type="button" data-game="${esc(bracketGame.id)}" data-go="1" data-go-view="bracket">Show in bracket</button>` : ""}</td>
         <td class="res ${/^[WLT]/.test(s.result || "") ? s.result[0] : ""}">${res}</td></tr>`;
     })
     .join("");
@@ -485,7 +641,7 @@ function teamPanel(id) {
     .map((l) => `<tr><td>${esc(l.stat)}</td><td>${esc(l.player)} <small>${esc(l.pos)}</small></td><td class="res">${esc(l.value)}</td></tr>`)
     .join("");
   return `<div class="team-head" style="border-color:#${/^[0-9a-f]{6}$/i.test(t.color) ? t.color : "12355b"}">
-      <img src="${logo(id)}" alt=""><div><h2>${esc(t.name)} ${esc(t.mascot || "")}</h2>
+      ${schoolMark(slot)}<div><h2>${esc(t.name)} ${esc(t.mascot || "")}</h2>
       <p>${t.city ? `${esc(t.city)}, Texas · ` : ""}${esc(b.label)}</p></div></div>
     <dl class="facts">
       ${fact("Record", t.record)}
@@ -504,11 +660,32 @@ function teamPanel(id) {
     <p><a class="btn" href="${safeUrl(t.url)}" target="_blank" rel="noopener">Team page on MaxPreps</a></p>`;
 }
 
-function open(html) {
+let detailGame;
+function open(html, gameId) {
   if (!html) return;
+  detailGame = gameId ? { id: gameId, html } : null;
   $("#panel-body").innerHTML = html;
   if (!$("#panel").open) $("#panel").showModal();
   $("#panel").scrollTop = 0;
+}
+
+function refreshGameDetail() {
+  const panel = $("#panel");
+  if (!panel.open || !detailGame) return;
+  const [, game] = findGame(detailGame.id);
+  if (!game) return;
+  const html = gameCard(game);
+  if (html === detailGame.html) return;
+  const focused = document.activeElement;
+  const key = focused.dataset.team ? "data-team" : focused.hasAttribute("href") ? "href" : null;
+  const scroll = panel.scrollTop;
+  detailGame.html = html;
+  $("#panel-body").innerHTML = html;
+  if (key) {
+    const next = panel.querySelector(`[${key}="${CSS.escape(focused.getAttribute(key))}"]`);
+    (next || panel.querySelector(".close")).focus({ preventScroll: true });
+  }
+  panel.scrollTop = scroll;
 }
 
 function search(q) {
@@ -529,6 +706,13 @@ function search(q) {
     : "<li><button type='button' disabled>No playoff team matches that name</button></li>";
 }
 
+function updateTreeNavigation() {
+  const tree = $("#tree");
+  $("#tree-prev").disabled = tree.scrollLeft <= 0;
+  $("#tree-next").disabled = tree.scrollLeft + tree.clientWidth >= tree.scrollWidth - 1;
+}
+$("#tree").addEventListener("scroll", updateTreeNavigation, { passive: true });
+
 function stepTree(dir) {
   const t = $("#tree");
   const heads = t.querySelectorAll("h3");
@@ -537,19 +721,25 @@ function stepTree(dir) {
 }
 
 document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-code],[data-round],[data-region],[data-view],[data-tab],[data-clear-path],[data-team],[data-game],.close,#tree-prev,#tree-next");
+  const el = e.target.closest("[data-code],[data-round],[data-region],[data-view],[data-tab],[data-clear-path],[data-pick-winner],[data-clear-picks],[data-team],[data-game],.close,#tree-prev,#tree-next");
   if (!el) return;
   if (el.matches(".close")) return $("#panel").close();
   if (el.id === "tree-prev") return stepTree(-1);
   if (el.id === "tree-next") return stepTree(1);
-  if (el.dataset.code) return pick(el.dataset.code);
+  if (el.dataset.code) {
+    return pick(el.dataset.code === "all" ? null : el.dataset.code);
+  }
   if (el.dataset.round) {
     if (el.dataset.view) state.view = el.dataset.view;
     return pick(state.code, el.dataset.round);
   }
   if (el.dataset.view) {
+    const previousView = state.view;
     state.view = el.dataset.view;
-    return render();
+    if (state.view === previousView) return;
+    if (state.view === "bracket") return pick(state.bracketCode || (previousView === "rounds" && state.code) || state.index.brackets[0].code);
+    if (state.view === "map") return pick(null);
+    return pick(state.gamesCode ?? null);
   }
   if (el.dataset.region) {
     state.region = el.dataset.region;
@@ -562,6 +752,24 @@ document.addEventListener("click", (e) => {
   if (el.dataset.clearPath) {
     state.path = null;
     return render();
+  }
+  if (el.hasAttribute("data-clear-picks")) {
+    state.data[state.code].games.forEach((g) => bracketPicks.delete(g.id));
+    lastBracketPick = null;
+    render();
+    return $("#tabs [aria-current='true']")?.focus({ preventScroll: true });
+  }
+  if (el.dataset.pickWinner) {
+    const { pickWinner, pickTeam } = el.dataset;
+    if (bracketPicks.get(pickWinner) === pickTeam) {
+      bracketPicks.delete(pickWinner);
+      lastBracketPick = null;
+    } else {
+      bracketPicks.set(pickWinner, pickTeam);
+      lastBracketPick = { code: state.code, game: pickWinner };
+    }
+    render();
+    return $(`[data-pick-winner="${CSS.escape(pickWinner)}"][data-pick-team="${CSS.escape(pickTeam)}"]`)?.focus({ preventScroll: true });
   }
   if (el.dataset.team) {
     if (el.closest("#tree")) {
@@ -577,27 +785,30 @@ document.addEventListener("click", (e) => {
     $("#panel").close();
     $("#results").hidden = true;
     $("#q").value = "";
+    state.view = el.dataset.goView === "bracket" ? "bracket" : "rounds";
     return pick(b.code, g.round, g.id);
   }
-  open(gameCard(g));
+  if (el.matches("#tree .cell")) el.querySelector(".more")?.focus({ preventScroll: true });
+  state.asked = null;
+  open(gameCard(g), g.id);
 });
 $("#panel").addEventListener("click", (e) => e.target === $("#panel") && $("#panel").close());
-$("#q").addEventListener("input", (e) => {
-  search(e.target.value);
-  Promise.allSettled([loadComps()]).then(() => search($("#q").value));
-});
-wide.addEventListener("change", () => state.code && render());
-addEventListener("hashchange", () => location.hash !== hash() && applyHash());
+$("#q").addEventListener("input", (e) => search(e.target.value));
+wide.addEventListener("change", () => $("#status").hidden && render());
+addEventListener("hashchange", () => $("#status").hidden && location.hash !== hash() && applyHash());
 
 async function refresh() {
   try {
     await load();
-    if (state.code) render();
-    else await (applyHash() || pick(state.index.brackets[0].code));
+    if (!state.teamsUpdated) await loadTeams();
+    await loadComps();
+    if ($("#status").hidden) render();
+    else await applyHash();
+    refreshGameDetail();
   } catch (err) {
     if (!$("#status").hidden) $("#status").textContent = "The brackets could not be loaded. Please try again in a few minutes.";
   }
 }
-window.Playoffs = { state, status, gameCard, open, teamPanel, pick, where };
-refresh();
+window.Playoffs = { state, status, gameCard, open, teamPanel, pick, where, setMapCode, schoolMark };
+document.addEventListener("DOMContentLoaded", refresh, { once: true });
 setInterval(refresh, 60 * 1000);

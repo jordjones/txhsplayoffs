@@ -4,28 +4,51 @@
   const P = () => window.Playoffs;
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "");
   const isNum = (v) => typeof v === "number" && Number.isFinite(v);
   const REGIONS = ["I", "II", "III", "IV"];
 
-  const ui = { mode: "games", scope: "all", when: "week", round: "", region: "", selected: null };
+  const defaultFilters = { mode: "games", scope: "all", when: "week", round: "", region: "", status: "all", "game-status": "all", selected: null };
+  const ui = { ...defaultFilters };
   const markers = new Map();
   let L, map, canvasR, pins, lines, freePopup;
-  let shown = false, lastCode = null, reconciling = false, loading = false, pending = null;
-  let placed = [], whenOptions = "", touched = false, fitting = false;
+  let shown = false, reconciling = false, loading = false, pending = null;
+  let placed = [], scopeOptions = "", whenOptions = "", touched = false, fitting = false;
   let roundDay = new Map();
 
-  view.innerHTML = `<div class="map-controls">
-      <div class="map-seg" role="group" aria-label="What to show on the map">
-        <button type="button" data-map-mode="games" aria-pressed="true">Games</button>
-        <button type="button" data-map-mode="teams" aria-pressed="false">Teams</button>
+  const choices = (field, values) => values.map(([value, label, name]) => {
+    const accessible = name || (field === "when" && value.startsWith("r:") ? value.slice(2) : "");
+    return `<button type="button" data-map-${field}="${esc(value)}" aria-pressed="false"${accessible ? ` aria-label="${esc(accessible)}"` : ""}>${esc(label)}</button>`;
+  }).join("");
+  const windows = [["week", "This week"], ["today", "Today + tomorrow"], ["next", "Next round"]];
+  const roundLabels = { "Regional Semifinals": "Regional semis", "Regional Finals": "Regional finals", Quarterfinals: "Quarters", Semifinals: "Semis", Championship: "Final" };
+
+  view.innerHTML = `<div class="map-dateline">
+      <div class="map-edition-head">
+        <h2>Texas map</h2>
+        <div class="map-edition-mode" role="group" aria-label="What to show on the map">
+          ${choices("mode", [["games", "Games"], ["teams", "Teams"]])}
+        </div>
       </div>
-      <div class="map-seg" role="group" aria-label="Which brackets to show">
-        <button type="button" data-map-scope="one" aria-pressed="false">This bracket</button>
-        <button type="button" data-map-scope="all" aria-pressed="true">All 12 brackets</button>
+      <div class="map-ledger">
+        <div class="map-filter-line map-competition" role="group" aria-labelledby="map-scope-label">
+          <b id="map-scope-label">Brackets</b><div id="map-scope-choices"></div>
+        </div>
+        <div class="map-filter-line" role="group" aria-labelledby="map-region-label">
+          <b id="map-region-label">Region</b><div>${choices("region", [["", "All regions"], ...REGIONS.map((r) => [r, r])])}</div>
+        </div>
+        <div class="map-filter-line map-schedule" id="map-when-field" role="group" aria-labelledby="map-when-label">
+          <b id="map-when-label">Schedule</b><div>${choices("when", windows)}</div>
+        </div>
+        <div class="map-filter-line map-schedule" id="map-round-field" role="group" aria-labelledby="map-round-label">
+          <b id="map-round-label">Round</b><div id="map-round-choices"></div>
+        </div>
+        <div class="map-filter-line" id="map-game-status-field" role="group" aria-labelledby="map-game-status-label">
+          <b id="map-game-status-label">Status</b><div>${choices("game-status", [["all", "All games"], ["live", "Live"], ["upcoming", "Scheduled"], ["final", "Final"]])}</div>
+        </div>
+        <div class="map-filter-line map-team-filter" id="map-status-field" role="group" aria-labelledby="map-status-label" hidden>
+          <b id="map-status-label">Status</b><div>${choices("status", [["all", "All teams"], ["alive", "Alive"], ["out", "Eliminated"], ["champ", "Champions"]])}</div>
+        </div>
       </div>
-      <label class="map-field" id="map-when-field">When <select id="map-when"></select></label>
-      <label class="map-field">Region <select id="map-region"><option value="">All regions</option>${REGIONS.map((r) => `<option value="${r}">Region ${r}</option>`).join("")}</select></label>
     </div>
     <p id="map-summary" class="map-summary"></p>
     <div class="map-stage"><div id="map-canvas" class="map-canvas">Loading the map…</div><p id="map-empty" class="map-empty" hidden></p></div>
@@ -62,10 +85,44 @@
     fitting = false;
   }
 
+  function addTexasOverview(L, map) {
+    const pane = "texas-overview";
+    map.createPane(pane).style.zIndex = 190;
+    map.getPane(pane).style.pointerEvents = "none";
+    // Generalized outline for the statewide view.
+    L.polygon([
+      [36.50,-103.00],[36.50,-100.00],[34.56,-100.00],[34.42,-99.60],
+      [34.14,-98.68],[34.11,-98.17],[34.06,-97.53],[33.88,-97.21],
+      [33.75,-96.84],[33.85,-96.19],[33.69,-95.32],[33.55,-94.48],
+      [33.56,-94.04],[31.98,-94.04],[31.83,-93.82],[31.21,-93.57],
+      [30.99,-93.55],[30.40,-93.76],[30.14,-93.70],[29.77,-93.90],
+      [29.40,-94.72],[28.74,-95.73],[28.39,-96.53],[27.82,-97.05],
+      [27.17,-97.38],[26.08,-97.15],[25.97,-97.37],[26.06,-98.24],
+      [26.37,-99.10],[27.05,-99.43],[27.52,-99.53],[28.31,-100.31],
+      [29.01,-100.67],[29.52,-101.27],[29.82,-101.38],[29.78,-102.06],
+      [29.22,-102.70],[28.98,-103.15],[29.25,-103.70],[29.52,-104.02],
+      [29.68,-104.47],[30.15,-104.69],[30.61,-104.98],[31.47,-106.22],
+      [31.78,-106.64],[31.78,-103.06],[32.00,-103.06],
+    ], { pane, color: "#79928b", weight: 2, fillColor: "#dae8dc", fillOpacity: 0.85, interactive: false }).addTo(map);
+    for (const [name, point] of [
+      ["Amarillo", [35.22,-101.83]], ["El Paso", [31.76,-106.49]],
+      ["Lubbock", [33.57,-101.85]], ["Dallas", [32.78,-96.80]],
+      ["Austin", [30.27,-97.74]], ["Houston", [29.76,-95.37]],
+      ["San Antonio", [29.42,-98.49]], ["Corpus Christi", [27.80,-97.40]],
+      ["Brownsville", [25.90,-97.50]],
+    ]) {
+      L.marker(point, {
+        pane, interactive: false, keyboard: false,
+        icon: L.divIcon({ className: "overview-city", html: name, iconSize: [0, 0] }),
+      }).addTo(map);
+    }
+  }
+
   function build() {
     const canvas = $("#map-canvas");
     canvas.textContent = "";
     map = L.map(canvas, { minZoom: 4, maxZoom: 17, zoomSnap: 0, zoomDelta: 0.75, maxBounds: TX().pad(0.6), maxBoundsViscosity: 0.7, zoomControl: false });
+    addTexasOverview(L, map);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -73,15 +130,19 @@
     L.control.zoom({ position: "bottomright", zoomInTitle: "Zoom in", zoomOutTitle: "Zoom out" }).addTo(map);
     const Reset = L.Control.extend({
       onAdd() {
-        const b = L.DomUtil.create("button", "map-reset");
-        b.type = "button";
-        b.textContent = "Show all of Texas";
-        L.DomEvent.disableClickPropagation(b);
-        b.addEventListener("click", () => {
+        const controls = L.DomUtil.create("div", "map-camera");
+        controls.innerHTML = '<button type="button" class="map-reset">Show all of Texas</button><button type="button" class="map-reset" id="map-fit-results">Fit results</button>';
+        L.DomEvent.disableClickPropagation(controls);
+        controls.firstElementChild.addEventListener("click", () => {
           touched = false;
           fitTexas();
         });
-        return b;
+        controls.lastElementChild.addEventListener("click", () => {
+          if (!placed.length) return;
+          touched = true;
+          map.fitBounds(L.latLngBounds(placed.map((it) => [it.lat, it.lon])), { padding: [26, 32], maxZoom: 10, animate: false });
+        });
+        return controls;
       },
     });
     new Reset({ position: "bottomleft" }).addTo(map);
@@ -106,7 +167,7 @@
 
   const brackets = () => {
     const s = P().state;
-    return ui.scope === "all" ? Object.values(s.data) : [s.data[s.code]].filter(Boolean);
+    return ui.scope === "all" ? Object.values(s.data) : [s.data[ui.scope]].filter(Boolean);
   };
   const currentRound = (b) => b.rounds.find((r) => b.games.some((g) => g.round === r && !g.final)) || b.rounds.at(-1);
   const status = (g) => {
@@ -123,8 +184,7 @@
     return l ? g.teams.findIndex((s) => s.id !== l) : -1;
   };
   const slotName = (s) => (s.id ? s.name : String(s.name).replace(/^Winner G(\d+)$/, "Winner of Game $1"));
-  const teamColor = (t) => (/^[0-9a-f]{6}$/i.test(t?.color || "") ? "#" + t.color : "#12355b");
-  const mascot = (id) => `https://image.maxpreps.io/school-mascot/${esc(id[0])}/${esc(id[1])}/${esc(id[2])}/${esc(id)}.gif?width=96&height=96&fit=bounds`;
+  const teamColor = (t) => (/^#?[0-9a-f]{6}$/i.test(t?.color || "") ? "#" + t.color.replace(/^#/, "") : "#12355b");
 
   const fmt = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   function when(k) {
@@ -195,6 +255,7 @@
       for (const g of b.games) {
         if (!inWhen(g, b) || (ui.region && g.region !== ui.region)) continue;
         const it = { key: "g:" + g.id, kind: "game", g, b, status: status(g), day: gameDay(g), lat: g.lat, lon: g.lon };
+        if (ui["game-status"] !== "all" && it.status !== ui["game-status"]) continue;
         (isNum(g.lat) && isNum(g.lon) ? out : missing).push(it);
       }
     return { out, missing };
@@ -220,6 +281,7 @@
         const lost = !!last && loser(last) === t.id;
         const champ = !!last && !lost && !!loser(last) && last.round === b.rounds.at(-1);
         const it = { key: "t:" + t.id, kind: "team", t, info, b, alive: !lost, champ, last, next, loose: info.loc === "town", lat: info.lat, lon: info.lon };
+        if (ui.status !== "all" && itemClass(it) !== ui.status) continue;
         (isNum(info.lat) && isNum(info.lon) ? out : missing).push(it);
       }
     }
@@ -231,7 +293,16 @@
     list[0].kind === "game"
       ? list.some((i) => i.status === "live") ? "live" : list.some((i) => i.status === "upcoming") ? "upcoming" : "final"
       : list.some((i) => i.champ) ? "champ" : list.some((i) => i.alive) ? "alive" : "out";
-  const labelText = (it) => (it.kind === "game" ? it.g.teams.map(slotName).join(" v ") : it.t.name);
+  const labelText = (it) => it.kind === "game"
+    ? `${it.g.teams.map((s, i) => [slotName(s), scoreOf(it, i)].filter(Boolean).join(" ")).join(" · ")} | ${statusWord(it)}`
+    : [it.t.name, it.info.city, it.champ ? "Champion" : it.alive ? "Alive" : "Eliminated"].filter(Boolean).join(" · ");
+
+  const markerText = (w) => {
+    if (w.item) return labelText(w.item);
+    const live = w.items.find((it) => it.status === "live");
+    const count = `${w.items.length} ${ui.mode === "games" ? "games" : "schools"} at this spot`;
+    return live ? `${count} · ${labelText(live)}` : count;
+  };
 
   const divIcon = (w, sel) =>
     L.divIcon({
@@ -288,6 +359,7 @@
       }
     }
     reconcile(want);
+    $("#map-fit-results").disabled = !out.length;
     if (freePopup?.isOpen() && ui.selected) {
       const it = out.find((i) => i.key === ui.selected);
       if (it) freePopup.setContent(popupHtml(it));
@@ -314,8 +386,9 @@
         if (w.type === "dot") {
           m = L.circleMarker(w.latlng, { ...dotStyle(w.item, sel), renderer: canvasR, bubblingMouseEvents: false });
         } else {
-          const title = w.item ? labelText(w.item) : `${w.items.length} ${ui.mode === "games" ? "games" : "schools"} at the same spot`;
+          const title = markerText(w);
           m = L.marker(w.latlng, { icon: divIcon(w, sel), zIndexOffset: w.z, title });
+          m.on("add", () => m.getElement().setAttribute("aria-label", m.options.title));
         }
         m._w = { ...w, sel };
         m.bindPopup((layer) => (layer._w.item ? popupHtml(layer._w.item) : listHtml(layer._w)), popOpts(w.type === "stack" ? 20 : 0));
@@ -331,6 +404,11 @@
           if (w.cls !== prev.cls || w.html !== prev.html || w.size !== prev.size || sel !== prev.sel) m.setIcon(divIcon(w, sel));
           if (w.z !== prev.z) m.setZIndexOffset(w.z);
         }
+        if (w.type !== "dot" && m.getElement()) {
+          m.options.title = markerText(w);
+          m.getElement().title = m.options.title;
+          m.getElement().setAttribute("aria-label", m.options.title);
+        }
         if (m.isPopupOpen()) m.getPopup().update();
       }
     }
@@ -342,21 +420,31 @@
   // Names only where they can be read: close in, and only for what is on screen.
   function relabel() {
     if (!map) return;
-    const on = map.getZoom() >= 9;
-    const vb = on ? map.getBounds().pad(-0.04) : null;
-    const edge = map.getSize().x * 0.55;
-    let budget = 60;
-    for (const m of markers.values()) {
+    const zoom = map.getZoom();
+    const vb = map.getBounds().pad(-0.06);
+    const edge = map.getSize().x * 0.5;
+    const occupied = [];
+    const screenWidth = map.getSize().x;
+    const zoomForLabels = placed.length <= 20 ? 6.5 : screenWidth < 500 ? 9 : 8;
+    const byPriority = [...markers.values()].sort((a, b) => Number(b._w.cls === "live") - Number(a._w.cls === "live"));
+    for (const m of byPriority) {
       const w = m._w;
-      const want = on && w.item && budget > 0 && vb.contains(m.getLatLng()) ? labelText(w.item) : null;
-      if (want) budget--;
-      // Names near the right edge read inwards, so they are not cut off.
-      const dir = want && map.latLngToContainerPoint(m.getLatLng()).x > edge ? "left" : "right";
-      if (want === (w.label ?? null) && dir === w.labelDir) continue;
+      const where = m.getLatLng();
+      const point = map.latLngToContainerPoint(where);
+      const dir = point.x > edge ? "left" : "right";
+      const live = w.cls === "live";
+      const eligible = vb.contains(where) && (live || (w.item && zoom >= zoomForLabels));
+      const maxWidth = Math.min(screenWidth * 0.46, 245);
+      const dx = (w.size ? w.size / 2 : dotRadius()) + 5;
+      const box = { left: dir === "left" ? point.x - dx - maxWidth : point.x + dx,
+        right: dir === "left" ? point.x - dx : point.x + dx + maxWidth, y: point.y };
+      const fits = !occupied.some((p) => Math.abs(box.y - p.y) < 48 && box.left < p.right && p.left < box.right);
+      const want = eligible && fits ? markerText(w) : null;
+      if (want) occupied.push(box);
+      if (want === (w.label ?? null) && (!want || dir === w.labelDir)) continue;
       if (!want) m.unbindTooltip();
       else if (m.getTooltip() && dir === w.labelDir) m.setTooltipContent(esc(want));
       else {
-        const dx = (w.size ? w.size / 2 : dotRadius()) + 5;
         m.unbindTooltip();
         m.bindTooltip(esc(want), { permanent: true, direction: dir, offset: [dir === "left" ? -dx : dx, 0], className: "mk-label" });
       }
@@ -374,6 +462,7 @@
         if (size !== w.size) {
           w.size = size;
           m.setIcon(divIcon(w, w.sel));
+          m.getElement()?.setAttribute("aria-label", m.options.title);
         }
       }
     }
@@ -458,7 +547,7 @@
   };
   const statusWord = (it) =>
     it.status === "live"
-      ? `Playing now${it.g.live?.period ? " · " + it.g.live.period : ""}`
+      ? `LIVE${it.g.live?.period ? " · " + it.g.live.period : ""}${it.g.live?.scores?.some((s) => s != null) ? "" : " · score pending"}`
       : it.status === "final"
         ? `Final${it.day ? " · " + dayWord(it.day) : ""}`
         : it.g.kickoff
@@ -482,7 +571,7 @@
       ${trip.length ? `<p class="pop-travel">${trip.join("<br>")}</p>` : ""}
       <div class="pop-actions">
         <button class="btn" type="button" data-game="${esc(g.id)}">Full details</button>
-        <button class="btn" type="button" data-game="${esc(g.id)}" data-go="1">Show in bracket</button>
+        <button class="btn" type="button" data-game="${esc(g.id)}" data-go="1" data-go-view="bracket">Show in bracket</button>
         ${canFit ? `<button class="btn" type="button" data-map-fit="${esc(it.key)}">Show the whole trip</button>` : ""}
       </div>`;
   }
@@ -501,34 +590,34 @@
         ? `Last game: ${esc(result(last))} vs ${esc(slotName(other(last)))} (${esc(last.round)})`
         : "Next game not posted yet.";
     const game = next || last;
-    return `<div class="pop-head" style="border-color:${teamColor(info)}"><img src="${safeUrl(info.logo) || mascot(t.id)}" alt="" loading="lazy" onerror="this.hidden=true"><div><b>${esc(t.name)} ${esc(info.mascot || "")}</b><span>${esc(info.city ? info.city + ", Texas" : "")}${t.record ? ` · ${esc(t.record)}` : ""}</span></div></div>
+    return `<div class="pop-head" style="--school-ink:${teamColor(info)};border-color:var(--school-ink)">${P().schoolMark(t)}<div><b>${esc(t.name)} ${esc(info.mascot || "")}</b><span>${esc(info.city ? info.city + ", Texas" : "")}${t.record ? ` · ${esc(t.record)}` : ""}</span></div></div>
       <p class="pop-status ${alive ? "alive" : "out"}">${champ ? "State champion" : alive ? "Still playing" : `Knocked out in the ${esc(last.round)} round`} · ${esc(b.label)}</p>
       <p>${gameLine}</p>
       ${loose ? `<p class="pop-note">Shown at the town centre.</p>` : ""}
       <div class="pop-actions">
         <button class="btn" type="button" data-team="${esc(t.id)}">Team details</button>
-        ${game ? `<button class="btn" type="button" data-game="${esc(game.id)}" data-go="1">Show in bracket</button>` : ""}
+        ${game ? `<button class="btn" type="button" data-game="${esc(game.id)}" data-go="1" data-go-view="bracket">Show in bracket</button>` : ""}
       </div>`;
   }
 
   function summary(out, missing) {
-    const s = P().state, b = s.data[s.code];
-    const scope = ui.scope === "all" ? "All 12 brackets" : b ? b.label : "";
+    const scope = P().state.index.brackets.find((b) => b.code === ui.scope)?.label || "All 12 brackets";
     const total = out.length + missing.length;
     let text;
     if (ui.mode === "games") {
       const n = { live: 0, final: 0, upcoming: 0 };
       out.forEach((i) => n[i.status]++);
       missing.forEach((i) => n[i.status]++);
-      text = `${scope} · ${whenWord()}: ${total} game${total === 1 ? "" : "s"} — ${n.live} playing now, ${n.final} final, ${n.upcoming} not started yet.`;
-      if (out.length) text += ` ${out.length} ${out.length === 1 ? "is" : "are"} on the map.`;
+      text = `${scope} · ${whenWord()}: ${total} game${total === 1 ? "" : "s"} · ${n.live} live · ${n.upcoming} scheduled · ${n.final} final.`;
     } else {
-      const alive = out.filter((i) => i.alive).length;
-      text = `${scope}: ${out.length} school${out.length === 1 ? "" : "s"} on the map — ${alive} still playing, ${out.length - alive} knocked out.`;
+      const alive = out.filter((i) => i.alive && !i.champ).length;
+      const eliminated = out.filter((i) => !i.alive).length;
+      const champions = out.filter((i) => i.champ).length;
+      text = `${scope}: ${out.length} school${out.length === 1 ? "" : "s"} on the map · ${alive} alive · ${eliminated} eliminated${champions ? " · " + champions + " champions" : ""}.`;
     }
     if (ui.region) text += ` Region ${ui.region} only.`;
     if (missing.length)
-      text += ` ${missing.length} ${missing.length === 1 ? "has" : "have"} no ${ui.mode === "games" ? "place" : "location"} yet — listed under the map.`;
+      text += ` ${missing.length} without locations are listed below.`;
     $("#map-summary").textContent = text;
   }
 
@@ -538,7 +627,8 @@
       ui.mode === "games"
         ? dot("live", "Playing now") + dot("final", "Final") + dot("upcoming", "Not started yet") + dot("upcoming stack", "Several games at the same spot — tap for the list", "3")
         : dot("dot alive", "Still playing") +
-          dot("dot out", "Knocked out") +
+          dot("dot out", "Eliminated") +
+          (out.some((i) => i.champ) ? dot("dot champ", "State champion") : "") +
           (out.some((i) => i.loose) ? dot("dot alive town", "Shown at the town centre") : "") +
           dot("alive stack", "Several schools at the same spot — tap for the list", "3");
   }
@@ -574,30 +664,38 @@
     if (ui.mode === "teams") {
       el.textContent = missing.length
         ? `None of these ${missing.length} schools has a location yet, so the map is empty. They are listed under the map.`
-        : "No schools to show here. Try All 12 brackets, or a different region.";
+        : "No schools match these filters. Try All teams, All 12 brackets, or another region.";
       return;
     }
     el.textContent = !missing.length
-      ? `No games ${whenPhrase()}. Try “This week” or “Next round” in the When box above.`
+      ? `No games ${whenPhrase()} match these filters. Try All games, This week, or another region.`
       : `None of these ${missing.length} games has a place yet, so the map is empty. They are listed under the map.`;
   }
 
   function refreshControls() {
-    view.querySelectorAll("[data-map-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mapMode === ui.mode)));
-    view.querySelectorAll("[data-map-scope]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mapScope === ui.scope)));
-    $("#map-when-field").hidden = ui.mode !== "games";
-    const rounds = [];
-    for (const x of brackets()) for (const r of x.rounds) if (!rounds.includes(r)) rounds.push(r);
-    const opts =
-      `<option value="today">Today and tomorrow</option><option value="week">This week</option><option value="next">Next round</option>` +
-      `<optgroup label="Pick a round">${rounds.map((r) => `<option value="r:${esc(r)}">${esc(r)}</option>`).join("")}</optgroup>`;
+    const competitions = P().state.index.brackets;
+    const scope = choices("scope", [["all", "All 12 brackets"], ...competitions.map(({ code, label }) =>
+      [code, code.replace("D1", " I").replace("D2", " II"), label])]);
+    if (scope !== scopeOptions) {
+      scopeOptions = scope;
+      $("#map-scope-choices").innerHTML = scope;
+    }
+    const rounds = [...new Set(brackets().flatMap((b) => b.rounds))];
+    const opts = choices("when", rounds.map((r) => ["r:" + r, roundLabels[r] || r]));
     if (opts !== whenOptions) {
       whenOptions = opts;
-      $("#map-when").innerHTML = opts;
+      $("#map-round-choices").innerHTML = opts;
     }
     if (ui.when === "round" && !rounds.includes(ui.round)) ui.when = "week";
-    $("#map-when").value = ui.when === "round" ? "r:" + ui.round : ui.when;
-    $("#map-region").value = ui.region;
+    const active = { ...ui, when: ui.when === "round" ? "r:" + ui.round : ui.when };
+    for (const field of fields) {
+      view.querySelectorAll(`[data-map-${field}]`).forEach((button) =>
+        button.setAttribute("aria-pressed", button.getAttribute(`data-map-${field}`) === active[field]));
+    }
+    $("#map-when-field").hidden = ui.mode !== "games";
+    $("#map-round-field").hidden = ui.mode !== "games";
+    $("#map-status-field").hidden = ui.mode !== "teams";
+    $("#map-game-status-field").hidden = ui.mode !== "games";
   }
 
   function reset() {
@@ -608,24 +706,23 @@
     layout();
   }
 
+  const fields = ["mode", "scope", "region", "when", "status", "game-status"];
   view.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-map-mode],[data-map-scope],[data-map-select],[data-map-fit]");
-    if (!el) return;
-    const d = el.dataset;
-    if (d.mapSelect) return map && pickFromList(d.mapSelect);
-    if (d.mapFit) return map && fitTrip(d.mapFit);
-    if (d.mapMode) ui.mode = d.mapMode;
-    else ui.scope = d.mapScope;
-    reset();
-  });
-  $("#map-when").addEventListener("change", (e) => {
-    const v = e.target.value;
-    ui.when = v.startsWith("r:") ? "round" : v;
-    ui.round = v.startsWith("r:") ? v.slice(2) : "";
-    reset();
-  });
-  $("#map-region").addEventListener("change", (e) => {
-    ui.region = e.target.value;
+    const el = e.target.closest("[data-map-select],[data-map-fit], " + fields.map((f) => `[data-map-${f}]`).join(", "));
+    if (!el || !map) return;
+    if (el.dataset.mapSelect) return pickFromList(el.dataset.mapSelect);
+    if (el.dataset.mapFit) return fitTrip(el.dataset.mapFit);
+    const field = fields.find((f) => el.hasAttribute(`data-map-${f}`));
+    const value = el.getAttribute(`data-map-${field}`);
+    if (field === "scope") {
+      ui.scope = value;
+      P().setMapCode(value === "all" ? null : value);
+      return reset();
+    }
+    if (field === "when" && value.startsWith("r:")) {
+      ui.when = "round";
+      ui.round = value.slice(2);
+    } else ui[field] = value;
     reset();
   });
 
@@ -633,13 +730,19 @@
     const s = P()?.state;
     if (!s) return;
     if (s.view !== "map" || view.hidden) {
-      shown = false;
+      if (shown) {
+        shown = false;
+        map.closePopup();
+        select(null);
+        Object.assign(ui, defaultFilters);
+        touched = false;
+      }
       return;
     }
-    if (s.code !== lastCode) {
-      const changed = lastCode !== null;
-      lastCode = s.code;
-      if (changed && ui.scope === "one" && map) {
+    const scope = s.code || "all";
+    if (ui.scope !== scope) {
+      ui.scope = scope;
+      if (map) {
         map.closePopup();
         select(null);
       }
@@ -671,7 +774,10 @@
   window.PlayoffsMap = {
     set(o = {}) {
       if (o.mode) ui.mode = o.mode;
-      if (o.scope) ui.scope = o.scope;
+      if (o.scope) {
+        const key = o.scope === "one" ? P()?.state.code : o.scope;
+        ui.scope = P()?.state.index.brackets.some((b) => b.code === key) ? key : "all";
+      }
       if (o.when) {
         ui.when = o.when;
         ui.round = "";
@@ -681,6 +787,8 @@
         ui.round = o.round;
       }
       if (o.region !== undefined) ui.region = o.region;
+      if (o.status !== undefined) ui.status = o.status;
+      if (o.gameStatus !== undefined) ui["game-status"] = o.gameStatus;
       pending = { center: o.center, zoom: o.zoom, select: o.select };
       if (map) {
         refreshControls();

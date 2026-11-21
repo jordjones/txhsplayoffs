@@ -1,22 +1,57 @@
-.map-controls {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 18px;
+#map-view .map-edition-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.map-seg {
-  grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr;
-  border: 2px solid var(--brand, #12355b); border-radius: 10px; overflow: hidden; background: #fff;
+#map-view .map-edition-head h2 { margin-block: 0; }
+.map-edition-mode, .map-filter-line > div { display: flex; align-items: center; flex-wrap: wrap; }
+.map-edition-mode { align-self: stretch; gap: 12px; }
+.map-edition-mode button, .map-filter-line button {
+  padding: 4px 6px;
+  min-height: 27px;
+  border: 0;
+  border-radius: 0;
+  color: #353535;
+  background: transparent;
 }
-.map-seg button {
-  min-height: 54px; border: 0; background: #fff; color: var(--brand, #12355b);
-  font-weight: 700; font-size: 1.05rem; padding: 10px;
+.map-edition-mode button {
+  min-height: 37px;
+  border-bottom: 3px solid transparent;
+  font: 700 1rem/1.15 Gelasio, Georgia, serif;
 }
-.map-seg button + button { border-left: 2px solid var(--brand, #12355b); }
-.map-seg button[aria-pressed="true"] { background: var(--brand, #12355b); color: #fff; }
-.map-field { display: flex; flex-direction: column; gap: 4px; font-weight: 700; }
-.map-field select {
-  font: inherit; font-size: 1.05rem; min-height: 54px; padding: 8px 12px; width: 100%;
-  border: 2px solid var(--muted, #4a5b6a); border-radius: 10px; background: #fff; color: var(--ink, #14202b);
+.map-edition-mode button[aria-pressed="true"] { border-color: #202020; color: #090909; }
+.map-ledger {
+  display: grid;
+  grid-template-columns: minmax(max-content, 2fr) minmax(max-content, 3fr);
+  border-top: 1px solid #bdbdbd;
 }
-.map-summary { margin: 12px 0 8px; font-size: 1.05rem; min-height: 1.4em; }
+.map-filter-line {
+  display: flex;
+  align-items: baseline;
+  column-gap: 8px;
+  min-height: 29px;
+  border-top: 1px dotted #bdbdbd;
+}
+.map-filter-line:nth-child(-n+2) { border-top: 0; }
+.map-filter-line > b {
+  flex: 0 0 8ch;
+  color: #575757;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font: 700 10px/1.2 ui-monospace, monospace;
+}
+.map-filter-line button { font: 600 12px/1.15 system-ui, sans-serif; }
+.map-filter-line button[aria-pressed="true"] { color: #111; background: #ecece8; text-decoration: underline; text-underline-offset: 3px; }
+.map-edition-mode button:hover, .map-filter-line button:hover { background: #efefed; }
+.map-edition-mode button:focus-visible, .map-filter-line button:focus-visible { outline: 2px solid #0b4f9e; outline-offset: -2px; }
+@media (max-width: 820px) {
+  .map-ledger { grid-template-columns: 1fr; }
+  .map-filter-line:nth-child(2) { border-top: 1px dotted #bdbdbd; }
+  .map-filter-line > b { flex-basis: 7ch; }
+  .map-filter-line button { padding-inline: 4px; }
+}
+.map-summary { margin: 6px 0; font: 14px/1.25 Gelasio, Georgia, serif; }
 /* Texas is nearly square, so keep the map nearly square: it then fills with Texas and little else. */
 .map-stage { position: relative; }
 .map-canvas {
@@ -29,10 +64,6 @@
   width: min(90%, 460px); margin: 0; padding: 14px 16px; font-size: 1.05rem; line-height: 1.4;
   background: #fff; color: var(--ink, #14202b); border: 2px solid var(--brand, #12355b); border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-@media (min-width: 900px) {
-  .map-controls { grid-template-columns: 1.3fr 1.3fr 1fr 1fr; }
-  .map-seg { grid-column: auto; }
 }
 @media (max-width: 560px) {
   .map-canvas { aspect-ratio: 0.88 / 1; max-height: 68vh; }
@@ -66,8 +97,7 @@
 .mk.out { background: #7d8790; }
 .mk.champ { background: #c98a00; }
 .mk.sel { box-shadow: 0 0 0 5px #ffd166, 0 2px 8px rgba(0, 0, 0, 0.5); }
-.mk.stack { font-size: 1.1rem; }
-.mk.stack.wide { font-size: 0.95rem; }
+.leaflet-marker-pane .mk.stack { display: flex; font-size: 14px; line-height: 1; }
 /* Swatches that match the school dots drawn on the map: solid = still playing, hollow = knocked out. */
 .mk.dot { background: #15509a; border-width: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
 .mk.dot.town { background: #8fb4de; }
@@ -140,3 +170,33 @@
 .pop-list .mk { position: relative; width: 20px; height: 20px; flex: none; }
 .pop-list .mk.live::after { display: none; }
 .pop-list small { color: var(--muted, #4a5b6a); display: block; }
+
+.map-camera { display: flex; gap: 6px; }
+.map-camera .map-reset {
+  min-height: 38px;
+  padding-inline: 9px;
+  border: 1px solid #444;
+  border-radius: 0;
+  box-shadow: 0 1px 3px #0003;
+  font: 700 13px/1 Gelasio, Georgia, serif;
+  color: #171717;
+}
+.map-camera .map-reset:disabled { opacity: .48; cursor: default; }
+.map-competition { grid-column: 1 / -1; }
+.map-competition button { white-space: nowrap; }
+.map-competition button[aria-pressed="true"],
+.map-filter-line button[aria-pressed="true"] { background: #e9f1f6; color: #123d56; }
+.map-edition-mode button[aria-pressed="true"] { border-color: #206583; color: #123d56; }
+@media (max-width: 820px) {
+  #map-scope-choices { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); flex: 1; }
+  #map-scope-choices button { min-width: 0; padding-inline: 1px; font-size: 11px; }
+  #map-scope-choices button:first-child { grid-column: 1 / -1; justify-self: start; padding-inline: 4px; }
+}
+.pop-head .school-mark { width: 42px; height: 42px; font-size: 13px; }
+
+.overview-city {
+  white-space: nowrap;
+  color: #334640;
+  font: 600 11px system-ui, sans-serif;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+}
