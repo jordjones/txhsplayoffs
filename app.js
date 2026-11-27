@@ -166,18 +166,26 @@ function seed(s) {
   const place = { W: "champion", R: "runner-up", T: "3rd place", F: "4th place" }[m[1]];
   return place ? `District ${m[2]} ${place}` : esc(s);
 }
-const placements = { "1st": [1, "Champion"], "2nd": [2, "Runner-up"], "3rd": [3, "Third place"], "4th": [4, "Fourth place"] };
+const placements = { "1st": [1, "Champs"], "2nd": [2, "Runner-up"], "3rd": [3, "Third"], "4th": [4, "Fourth"] };
 
 function districtStanding(id) {
   const team = state.teams[id];
   if (!team?.district) return "";
   const place = Object.hasOwn(placements, team.district_place) ? placements[team.district_place] : null;
-  const rank = place
-    ? `<span class="place-icon" aria-hidden="true">${place[0]}</span><span class="visually-hidden">${place[1]} </span>`
-    : team.district_place ? `<span class="place-text">${esc(team.district_place)}</span> ` : "";
-  const name = `${rank}<span class="district-name">${esc(team.district)}</span>`;
+  const parts = /^([1-6]A)(?:(?:-| 6 Man )([12]))? Region [IV]+ District (\d+)(?: \(6 Man\))?$/.exec(team.district);
+  const label = parts ? `District ${parts[3]}-${parts[1]}${parts[2] ? (parts[2] === "1" ? "-I" : "-II") : ""}` : team.district;
+  const sixA = parts?.[1] === "6A";
+  const finish = place?.[1] || team.district_place;
+  let rank = "";
+  if (place) {
+    rank = `<span class="place-icon" aria-hidden="true">${place[0]}</span>`;
+    if (!sixA) rank += `<span class="visually-hidden">${place[1]} </span>`;
+  } else if (!sixA && finish) {
+    rank = `<span class="place-text">${esc(finish)}</span> `;
+  }
+  const name = `${rank}<span class="district-name">${esc(label)}${sixA && finish ? " " + esc(finish) : ""}</span>`;
   const href = safeUrl(team.standings_url);
-  const description = [team.district, place?.[1] || team.district_place, "MaxPreps standings"].filter(Boolean).join(" · ");
+  const description = [team.district, finish, "MaxPreps standings"].filter(Boolean).join(" · ");
   return href === "#"
     ? `<span class="district-standing">${name}</span>`
     : `<a class="district-standing" href="${href}" title="${esc(description)}" target="_blank" rel="noopener">${name}</a>`;
