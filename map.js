@@ -183,7 +183,7 @@
     const l = loser(g);
     return l ? g.teams.findIndex((s) => s.id !== l) : -1;
   };
-  const slotName = (s) => (s.id ? s.name : String(s.name).replace(/^Winner G(\d+)$/, "Winner of Game $1"));
+  const slotName = (s) => P().slotName(s);
   const teamColor = (t) => (/^#?[0-9a-f]{6}$/i.test(t?.color || "") ? "#" + t.color.replace(/^#/, "") : "#12355b");
 
   const fmt = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -564,10 +564,10 @@
     });
     const canFit = g.teams.some((s) => school(b, s));
     const loose = g.venue_exact === false || g.loc === "town";
-    return `<p class="pop-crumb">${ui.scope === "all" ? esc(b.label) + " · " : ""}${esc(g.round)}${g.num ? " · " + esc(String(g.num).replace("G", "Game ")) : ""}</p>
+    return `<p class="pop-crumb">${ui.scope === "all" ? esc(b.label) + " · " : ""}${esc(g.round)}</p>
       <p class="pop-where"><b>${esc(P().where(g))}</b>${loose ? "<small>Marker is at the town, not the stadium.</small>" : ""}</p>
       <p class="pop-status ${st}">${esc(statusWord(it))}</p>
-      <div class="pop-teams">${g.teams.map((s, i) => `<div class="${i === w ? "won" : ""}"><span>${esc(slotName(s))}</span><b>${esc(scoreOf(it, i))}</b></div>`).join("")}</div>
+      <div class="pop-teams">${g.teams.map((s, i) => `<div class="${i === w ? "won" : ""}"><span>${esc(slotName(s))}${P().districtStanding(s.id)}</span><b>${esc(scoreOf(it, i))}</b></div>`).join("")}</div>
       ${trip.length ? `<p class="pop-travel">${trip.join("<br>")}</p>` : ""}
       <div class="pop-actions">
         <button class="btn" type="button" data-game="${esc(g.id)}">Full details</button>
@@ -590,8 +590,10 @@
         ? `Last game: ${esc(result(last))} vs ${esc(slotName(other(last)))} (${esc(last.round)})`
         : "Next game not posted yet.";
     const game = next || last;
+    const district = P().districtStanding(t.id);
     return `<div class="pop-head" style="--school-ink:${teamColor(info)};border-color:var(--school-ink)">${P().schoolMark(t)}<div><b>${esc(t.name)} ${esc(info.mascot || "")}</b><span>${esc(info.city ? info.city + ", Texas" : "")}${t.record ? ` · ${esc(t.record)}` : ""}</span></div></div>
       <p class="pop-status ${alive ? "alive" : "out"}">${champ ? "State champion" : alive ? "Still playing" : `Knocked out in the ${esc(last.round)} round`} · ${esc(b.label)}</p>
+      ${district ? `<p>${district}</p>` : ""}
       <p>${gameLine}</p>
       ${loose ? `<p class="pop-note">Shown at the town centre.</p>` : ""}
       <div class="pop-actions">

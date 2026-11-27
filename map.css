@@ -147,6 +147,7 @@
   display: flex; justify-content: space-between; gap: 12px; padding: 6px 0;
   border-top: 1px solid var(--line, #c9d2da); font-size: 1.1rem;
 }
+.pop-teams .district-standing { display: flex; }
 .pop-teams b { font-size: 1.3rem; min-width: 2ch; text-align: right; }
 .pop-teams .won { color: var(--win, #0b5d2a); font-weight: 800; }
 .pop-travel { margin-top: 8px !important; }
@@ -157,7 +158,6 @@
   display: flex; gap: 10px; align-items: center; border-left: 8px solid var(--brand, #12355b);
   padding-left: 10px; margin: 0 36px 8px 0;
 }
-.pop-head img { width: 48px; height: 48px; object-fit: contain; flex: none; }
 .pop-head b { font-size: 1.15rem; display: block; line-height: 1.2; }
 .pop-head span { color: var(--muted, #4a5b6a); }
 .pop-list { list-style: none; margin: 0; padding: 0; max-height: 38vh; overflow: auto; }
@@ -192,7 +192,7 @@
   #map-scope-choices button { min-width: 0; padding-inline: 1px; font-size: 11px; }
   #map-scope-choices button:first-child { grid-column: 1 / -1; justify-self: start; padding-inline: 4px; }
 }
-.pop-head .school-mark { width: 42px; height: 42px; font-size: 13px; }
+.pop-head .school-mark { width: 48px; height: 48px; font-size: 13px; }
 
 .overview-city {
   white-space: nowrap;

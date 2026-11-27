@@ -166,24 +166,35 @@ function seed(s) {
   const place = { W: "champion", R: "runner-up", T: "3rd place", F: "4th place" }[m[1]];
   return place ? `District ${m[2]} ${place}` : esc(s);
 }
-function seedShort(s) {
-  const m = /^([WRTF])(\d+)$/.exec(s || "");
-  return m ? `Dist. ${m[2]} ${{ W: "champ", R: "runner-up", T: "3rd", F: "4th" }[m[1]]}` : s || "";
+const placements = { "1st": [1, "Champion"], "2nd": [2, "Runner-up"], "3rd": [3, "Third place"], "4th": [4, "Fourth place"] };
+
+function districtStanding(id) {
+  const team = state.teams[id];
+  if (!team?.district) return "";
+  const place = Object.hasOwn(placements, team.district_place) ? placements[team.district_place] : null;
+  const rank = place
+    ? `<span class="place-icon" aria-hidden="true">${place[0]}</span><span class="visually-hidden">${place[1]} </span>`
+    : team.district_place ? `<span class="place-text">${esc(team.district_place)}</span> ` : "";
+  const name = `${rank}<span class="district-name">${esc(team.district)}</span>`;
+  const href = safeUrl(team.standings_url);
+  const description = [team.district, place?.[1] || team.district_place, "MaxPreps standings"].filter(Boolean).join(" · ");
+  return href === "#"
+    ? `<span class="district-standing">${name}</span>`
+    : `<a class="district-standing" href="${href}" title="${esc(description)}" target="_blank" rel="noopener">${name}</a>`;
 }
 
 const logo = (id) => `https://image.maxpreps.io/school-mascot/${esc(id[0])}/${esc(id[1])}/${esc(id[2])}/${esc(id)}.gif?width=96&height=96&fit=bounds`;
 function schoolMark(team) {
   const info = state.teams[team.id];
-  const color = /^[0-9a-f]{6}$/i.test(info?.color ?? "") ? `#${info.color}` : "#12355b";
   const words = team.name.trim().split(/\s+/);
   const initials = (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase();
-  return `<span class="school-mark" aria-hidden="true" style="--school-color:${color}"><span class="school-monogram">${esc(initials)}</span>
+  return `<span class="school-mark" aria-hidden="true"><span class="school-monogram">${esc(initials)}</span>
     <img src="${info?.logo ? safeUrl(info.logo) : logo(team.id)}" alt="" loading="lazy" onload="this.classList.add('loaded')" onerror="this.hidden=true"></span>`;
 }
 const winner = (g) => (g.final && g.teams[0].score !== g.teams[1].score ? (g.teams[0].score > g.teams[1].score ? 0 : 1) : -1);
 const known = (g) => g.teams.every((t) => t.id);
 const scores = (g) => (!g.final && g.live && Array.isArray(g.live.scores) ? g.live.scores : g.teams.map((t) => t.score));
-const tbd = (name) => esc(String(name || "To be decided").replace(/^Winner G/, "Winner of Game "));
+const slotName = ({ id, name }) => !id && /^Winner (?:G|of Game\s*)\d+$/i.test(name) ? "To be decided" : name || "To be decided";
 const liveOnes = (b) => b.games.filter((g) => status(g) === "live");
 
 function badge(g, st, pastKickoff) {
@@ -193,12 +204,12 @@ function badge(g, st, pastKickoff) {
 }
 
 function teamRow(t, won, score) {
-  if (!t.id) return `<div class="team"><span class="tbd">${tbd(t.name)}</span></div>`;
+  if (!t.id) return `<div class="team"><span class="tbd">${esc(slotName(t))}</span></div>`;
   return `<div class="team${won ? " won" : ""}">
     ${schoolMark(t)}
     <button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}${t.record ? ` <small>(${esc(t.record)})</small>` : ""}</button>
     ${won ? '<span class="wonword"><span aria-hidden="true">✓</span><span class="visually-hidden">Winner</span></span>' : ""}
-    <span class="seed">${esc(seedShort(t.seed))}</span>
+    ${districtStanding(t.id)}
     <span class="score">${score ?? ""}</span>
   </div>`;
 }
@@ -208,7 +219,7 @@ function gameCard(g, now = nowWall()) {
   const pastKickoff = st === "upcoming" && kickoffPassed(g, now);
   const sc = scores(g);
   const w = sc.every(Number.isFinite) ? winner(g) : -1;
-  const matchup = g.teams.map((t) => t.name).filter(Boolean).join(" vs. ");
+  const matchup = g.teams.map(slotName).join(" vs. ");
   const place = where(g);
   const nfhs = g.watch
     ? `<a href="${safeUrl(g.watch)}" target="_blank" rel="noopener" aria-label="Watch · NFHS Network · ${esc(matchup)}">Watch · NFHS</a>`
@@ -223,7 +234,7 @@ function gameCard(g, now = nowWall()) {
       : '<span class="score-note">Score pending</span>'
     : "";
   return `<article class="game desk-game ${st}${state.hit === g.id ? " hit" : ""}" id="g-${esc(g.id)}">
-    <div class="head"><span>${esc(g.num.replace("G", "Game "))} · ${esc(g.round)}${g.region ? ` · Region ${esc(g.region)}` : ""}</span>${badge(g, st, pastKickoff)}</div>
+    <div class="head"><span>${esc(g.round)}${g.region ? ` · Region ${esc(g.region)}` : ""}</span>${badge(g, st, pastKickoff)}</div>
     <div class="matchup">${g.teams.map((t, i) => teamRow(t, i === w, sc[i])).join("")}</div>
     ${place ? `<div class="place"><span class="where">${esc(place)}</span></div>` : ""}
     ${nfhs || mp || note ? `<div class="provider-links">${nfhs}${mp}${note}</div>` : ""}
@@ -281,7 +292,7 @@ function forecastRoute(b, projected) {
     const candidates = [...new Map(options(slot, game).map((t) => [t.id, t.name])).values()];
     const listed = candidates.slice(0, 4).map(esc).join(" / ");
     const more = candidates.length > 4 ? ` +${candidates.length - 4} more` : "";
-    return tbd(slot.name) + (listed ? ` (${listed}${more})` : "");
+    return listed ? `${listed}${more}` : esc(slotName(slot));
   }
   const route = [];
   for (let feeder = start, game = byId.get(start.next); game; feeder = game, game = byId.get(game.next)) {
@@ -300,23 +311,23 @@ function cell(g, style, teams) {
   const st = status(g);
   const sc = scores(g);
   const w = sc.every(Number.isFinite) ? winner(g) : -1;
-  const gameLabel = g.num.replace("G", "Game ");
+  const matchup = teams.some((t) => t.id) ? teams.map(slotName).join(" vs. ") : g.round;
   const row = (t, i) =>
     t.id
       ? `<div class="row${i === w ? " won" : ""}"${t.hypothetical ? " data-pick-projected" : ""}>
         ${schoolMark(t)}
-        <div class="who"><button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}</button></div>
+        <div class="who"><button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}</button>${districtStanding(t.id)}</div>
         ${sc[i] == null ? "" : `<b class="pts">${sc[i]}</b>`}
         ${i === w ? '<span class="visually-hidden">Winner</span>' : ""}
         ${g.final ? "" : `<button class="pick-winner" type="button" data-pick-winner="${esc(g.id)}" data-pick-team="${esc(t.id)}"
-          aria-label="Pick ${esc(t.name)} to win ${esc(gameLabel)}" aria-pressed="${bracketPicks.get(g.id) === t.id}">↗</button>`}</div>`
-      : `<div class="row"><span class="tbd">${tbd(t.name)}</span></div>`;
+          aria-label="Pick ${esc(t.name)} to win in ${esc(g.round)}" aria-pressed="${bracketPicks.get(g.id) === t.id}">↗</button>`}</div>`
+      : `<div class="row"><span class="tbd">${esc(slotName(t))}</span></div>`;
   const tag = st === "live" ? `<span class="st live"><i class="dot"></i>LIVE${g.live?.period ? ` · ${esc(g.live.period)}` : ""}</span>` : st === "final" ? `<span class="st final">FINAL</span>` : `<span class="st soon">${esc(shortWhen(g.kickoff))}</span>`;
   const cls = ["cell", st, state.hit === g.id ? "hit" : "", state.path && g.teams.some((t) => t.id === state.path) ? "path" : ""].filter(Boolean).join(" ");
   return `<div class="${cls}" id="g-${esc(g.id)}" data-game="${esc(g.id)}" style="${style}">
-    <button class="tag" type="button" tabindex="-1" aria-label="Open ${esc(gameLabel)}"><span class="gnum">${esc(gameLabel)}</span>${tag}</button>
+    <button class="tag" type="button" tabindex="-1" aria-label="Details for ${esc(matchup)}">${tag}</button>
     ${teams.map(row).join("")}
-    <div class="foot"><span class="town">${esc(g.town || g.city || g.stadium || "")}</span><button class="more" type="button" data-game="${esc(g.id)}" aria-label="Details for ${esc(gameLabel)}">Details <span aria-hidden="true">›</span></button></div>
+    <div class="foot"><span class="town">${esc(g.town || g.city || g.stadium || "")}</span><button class="more" type="button" data-game="${esc(g.id)}" aria-label="Details for ${esc(matchup)}">Details <span aria-hidden="true">›</span></button></div>
   </div>`;
 }
 
@@ -610,8 +621,10 @@ function teamPanel(id) {
   if (!b) return;
   const slot = games[0].teams.find((t) => t.id === id);
   const t = b.teams[id];
+  const district = districtStanding(id);
   if (!t?.url) {
     return `<div class="team-head">${schoolMark(slot)}<div><h2>${esc(slot.name)}</h2><p>${esc(b.label)}</p></div></div>
+      ${district ? `<p>${district}</p>` : ""}
       <p>More details for this team have not been collected yet.</p>
       ${slot.url ? `<p><a class="btn" href="${safeUrl(slot.url)}" target="_blank" rel="noopener">Team page on MaxPreps</a></p>` : ""}`;
   }
@@ -645,13 +658,13 @@ function teamPanel(id) {
       <p>${t.city ? `${esc(t.city)}, Texas · ` : ""}${esc(b.label)}</p></div></div>
     <dl class="facts">
       ${fact("Record", t.record)}
-      ${fact("District", t.district_record ? `${t.district_record}${t.district_place ? ` (${t.district_place})` : ""}` : null)}
+      ${fact("District record", t.district_record)}
       ${fact("Points scored", t.pf)}${fact("Points allowed", t.pa)}
       ${fact("Home", t.home)}${fact("Away", t.away)}
       ${fact("Streak", t.streak ? `${{ W: "Won", L: "Lost", T: "Tied" }[t.streak[0]] || ""} ${t.streak.slice(1)}` : null)}
       ${fact("Head coach", head?.name)}
     </dl>
-    ${t.district ? `<p>${esc(t.district)}</p>` : ""}
+    ${district ? `<p>${district}</p>` : ""}
     ${others.length ? `<details><summary>Coaching staff (${others.length} more)</summary><table>${others.map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.role)}</td></tr>`).join("")}</table></details>` : ""}
     <h3>Season schedule</h3>
     ${rows ? `<table><tr><th>Date</th><th>Opponent</th><th>Result</th></tr>${rows}</table>` : "<p>No schedule is posted for this team.</p>"}
@@ -721,6 +734,7 @@ function stepTree(dir) {
 }
 
 document.addEventListener("click", (e) => {
+  if (e.target.closest("a.district-standing")) return;
   const el = e.target.closest("[data-code],[data-round],[data-region],[data-view],[data-tab],[data-clear-path],[data-pick-winner],[data-clear-picks],[data-team],[data-game],.close,#tree-prev,#tree-next");
   if (!el) return;
   if (el.matches(".close")) return $("#panel").close();
@@ -809,6 +823,6 @@ async function refresh() {
     if (!$("#status").hidden) $("#status").textContent = "The brackets could not be loaded. Please try again in a few minutes.";
   }
 }
-window.Playoffs = { state, status, gameCard, open, teamPanel, pick, where, setMapCode, schoolMark };
+window.Playoffs = { state, status, gameCard, open, teamPanel, pick, where, setMapCode, schoolMark, slotName, districtStanding };
 document.addEventListener("DOMContentLoaded", refresh, { once: true });
 setInterval(refresh, 60 * 1000);

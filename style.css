@@ -117,7 +117,6 @@ main.wide > :not(#bracket), main.wide #bracket > :not(#bracket-view), main.wide 
 .team .score { font-size: 1.6rem; font-weight: 800; min-width: 2.2ch; text-align: right; }
 .team.won .name, .team.won .score { font-weight: 800; color: var(--win); }
 .team .wonword { font-size: 0.8rem; font-weight: 800; color: var(--win); letter-spacing: 0.04em; }
-.seed { font-size: 0.85rem; color: var(--muted); min-width: 5.5rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .btn {
   display: inline-block; padding: 12px 16px; border-radius: 10px; font-weight: 700;
@@ -151,7 +150,6 @@ main.wide > :not(#bracket), main.wide #bracket > :not(#bracket-view), main.wide 
 .cell.path { background: #fff4d6; border-color: #e0b64f; border-left-color: #e0b64f; }
 .cell.path.live { border-color: var(--live); border-left-color: var(--live); }
 .cell .tag { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 4px; }
-.cell .tag .gnum { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
 .cell .tag .st { font-size: 0.75rem; padding: 1px 8px; }
 .cell .row { display: flex; align-items: center; gap: 7px; padding: 4px 0; border-top: 1px solid var(--line); min-width: 0; }
 .cell .row img { width: 26px; height: 26px; object-fit: contain; flex: none; }
@@ -171,7 +169,7 @@ main.wide > :not(#bracket), main.wide #bracket > :not(#bracket-view), main.wide 
 }
 .grid.compact { --cellw: minmax(188px, 1fr); --gapw: 22px; }
 .grid.compact .cell { font-size: 0.82rem; padding: 4px 6px 4px 8px; }
-.grid.compact .who small, .grid.compact .foot .town, .grid.compact .tag .gnum { display: none; }
+.grid.compact .who small, .grid.compact .foot .town { display: none; }
 .grid.compact .who .name { font-size: 0.92rem; min-height: 26px; }
 .grid.compact .row img { width: 22px; height: 22px; }
 .grid.compact .more { padding: 3px 9px; min-height: 30px; font-size: 0.8rem; }
@@ -221,7 +219,6 @@ footer { max-width: 1000px; margin: 24px auto; padding: 0 16px 24px; color: var(
   .grid h3, .cell { scroll-snap-align: start; }
 }
 @media (max-width: 560px) {
-  .seed { display: none; }
   .team .name small { display: block; margin-left: 0; }
   .views button { font-size: 0.95rem; padding: 10px 4px; }
   .legend { line-height: 1.9; }
@@ -566,9 +563,6 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   align-self: center;
   width: 18px;
   height: 18px;
-  border: 1px solid #283a4b;
-  border-bottom: 3px solid var(--school-color);
-  background: #fff;
   color: #1b2c3d;
   font: 800 8px/1 system-ui, sans-serif;
 }
@@ -578,10 +572,34 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #fff;
   opacity: 0;
 }
 .school-mark img.loaded { opacity: 1; }
+.school-mark:has(img.loaded) .school-monogram { visibility: hidden; }
+
+.district-standing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-block: 2px;
+  color: #455669;
+  font: 600 11px/1.2 system-ui, sans-serif;
+}
+a.district-standing { color: #133b65; text-decoration: none; }
+a.district-standing .district-name { text-decoration: underline; text-underline-offset: 2px; }
+.district-name { overflow-wrap: anywhere; }
+.place-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+}
 
 .division-key { color: #455669; font: 700 10px/1 system-ui, sans-serif; white-space: nowrap; }
 
@@ -636,7 +654,7 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   padding: 0;
   border-top: 1px solid #e5e5e5;
 }
-.desk-game .team img { align-self: center; width: 18px; height: 18px; }
+.desk-game .team .school-mark { width: 22px; height: 22px; }
 .desk-game .team .name,
 .desk-game .team .tbd {
   font: 700 16px/1.12 Gelasio, Georgia, serif;
@@ -665,8 +683,16 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   font-variant-numeric: tabular-nums;
 }
 .desk-game .team.won .name, .desk-game .team.won .score { color: var(--win); }
-.desk-game .team .seed { font-size: 10px; min-width: 0; color: #525252; }
 .desk-game .team .wonword { color: var(--win); font-size: 12px; }
+@media (max-width: 560px) {
+  .desk-game .team:has(.district-standing) {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto auto;
+    gap: 0 5px;
+  }
+  .desk-game .team .district-standing { grid-area: 2 / 2 / 3 / -1; justify-self: start; }
+  .desk-game .team .score { grid-area: 1 / 4; }
+}
 .desk-game .place,
 .desk-game .game-kickoff,
 .desk-game .score-note {
@@ -734,7 +760,6 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   gap: 2px; margin-bottom: 1px; justify-content: space-between;
   width: 100%; padding: 0; border: 0; background: transparent; color: inherit;
 }
-#bracket-view .cell .tag .gnum,
 #bracket-view .cell .tag .st {
   display: inline;
   padding: 0;
@@ -751,6 +776,7 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   padding: 0 2px;
 }
 #bracket-view .cell .school-mark img { width: 100%; height: 100%; }
+#bracket-view .cell .district-standing { align-self: start; }
 #bracket-view .cell .who .name {
   min-height: 25px;
   white-space: normal;
