@@ -589,17 +589,6 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
 a.district-standing { color: #133b65; text-decoration: none; }
 a.district-standing .district-name { text-decoration: underline; text-underline-offset: 2px; }
 .district-name { overflow-wrap: anywhere; }
-.place-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 15px;
-  height: 15px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 800;
-}
 
 .division-key { color: #455669; font: 700 10px/1 system-ui, sans-serif; white-space: nowrap; }
 
