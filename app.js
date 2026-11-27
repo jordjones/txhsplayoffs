@@ -172,8 +172,8 @@ function districtStanding(id) {
   const team = state.teams[id];
   if (!team?.district) return "";
   const finish = Object.hasOwn(placements, team.district_place) ? placements[team.district_place] : team.district_place;
-  const parts = /^([1-6]A)(?:(?:-| 6 Man )([12]))? Region [IV]+ District (\d+)(?: \(6 Man\))?$/.exec(team.district);
-  const label = parts ? `District ${parts[3]}-${parts[1]}${parts[2] ? (parts[2] === "1" ? "-I" : "-II") : ""}` : team.district;
+  const number = /\bDistrict (\d+)\b/i.exec(team.district);
+  const label = number ? `dist. ${number[1]}` : team.district;
   const name = `<span class="district-name">${esc([label, finish].filter(Boolean).join(" "))}</span>`;
   const href = safeUrl(team.standings_url);
   const description = [team.district, finish, "MaxPreps standings"].filter(Boolean).join(" · ");
@@ -315,11 +315,12 @@ function cell(g, style, teams) {
     t.id
       ? `<div class="row${i === w ? " won" : ""}"${t.hypothetical ? " data-pick-projected" : ""}>
         ${schoolMark(t)}
-        <div class="who"><button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}</button>${districtStanding(t.id)}</div>
+        <div class="who"><button class="name" type="button" data-team="${esc(t.id)}">${esc(t.name)}</button></div>
         ${sc[i] == null ? "" : `<b class="pts">${sc[i]}</b>`}
         ${i === w ? '<span class="visually-hidden">Winner</span>' : ""}
         ${g.final ? "" : `<button class="pick-winner" type="button" data-pick-winner="${esc(g.id)}" data-pick-team="${esc(t.id)}"
-          aria-label="Pick ${esc(t.name)} to win in ${esc(g.round)}" aria-pressed="${bracketPicks.get(g.id) === t.id}">↗</button>`}</div>`
+          aria-label="Pick ${esc(t.name)} to win in ${esc(g.round)}" aria-pressed="${bracketPicks.get(g.id) === t.id}">↗</button>`}
+        ${districtStanding(t.id)}</div>`
       : `<div class="row"><span class="tbd">${esc(slotName(t))}</span></div>`;
   const tag = st === "live" ? `<span class="st live"><i class="dot"></i>LIVE${g.live?.period ? ` · ${esc(g.live.period)}` : ""}</span>` : st === "final" ? `<span class="st final">FINAL</span>` : `<span class="st soon">${esc(shortWhen(g.kickoff))}</span>`;
   const cls = ["cell", st, state.hit === g.id ? "hit" : "", state.path && g.teams.some((t) => t.id === state.path) ? "path" : ""].filter(Boolean).join(" ");

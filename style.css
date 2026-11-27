@@ -584,7 +584,7 @@ main:has(#map-view:not([hidden])) .desk-nav .results {
   min-width: 0;
   padding-block: 2px;
   color: #455669;
-  font: 600 11px/1.2 system-ui, sans-serif;
+  font: 400 11px/1.2 system-ui, sans-serif;
 }
 a.district-standing { color: #133b65; text-decoration: none; }
 a.district-standing .district-name { text-decoration: underline; text-underline-offset: 2px; }
@@ -623,6 +623,7 @@ a.district-standing .district-name { text-decoration: underline; text-underline-
   color: #474747;
 }
 .desk-game .match-status {
+  margin-inline-start: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -673,15 +674,14 @@ a.district-standing .district-name { text-decoration: underline; text-underline-
 }
 .desk-game .team.won .name, .desk-game .team.won .score { color: var(--win); }
 .desk-game .team .wonword { color: var(--win); font-size: 12px; }
-@media (max-width: 560px) {
-  .desk-game .team:has(.district-standing) {
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr) auto auto;
-    gap: 0 5px;
-  }
-  .desk-game .team .district-standing { grid-area: 2 / 2 / 3 / -1; justify-self: start; }
-  .desk-game .team .score { grid-area: 1 / 4; }
+.desk-game .team .score:empty { display: none; }
+.desk-game .team:has(.score:not(:empty)) {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  gap: 0 5px;
 }
+.desk-game .team .district-standing { grid-area: 2 / 2 / 3 / -1; justify-self: end; text-align: right; }
+.desk-game .team .score { grid-area: 1 / 4; }
 .desk-game .place,
 .desk-game .game-kickoff,
 .desk-game .score-note {
@@ -746,7 +746,7 @@ a.district-standing .district-name { text-decoration: underline; text-underline-
 #bracket-view .cell.live { border-inline-start-color: var(--live); box-shadow: none; }
 #bracket-view .cell.final { border-inline-start-color: var(--win); }
 #bracket-view .cell .tag {
-  gap: 2px; margin-bottom: 1px; justify-content: space-between;
+  gap: 2px; margin-bottom: 1px; justify-content: flex-end;
   width: 100%; padding: 0; border: 0; background: transparent; color: inherit;
 }
 #bracket-view .cell .tag .st {
@@ -765,7 +765,13 @@ a.district-standing .district-name { text-decoration: underline; text-underline-
   padding: 0 2px;
 }
 #bracket-view .cell .school-mark img { width: 100%; height: 100%; }
-#bracket-view .cell .district-standing { align-self: start; }
+#bracket-view .cell .row:has(.district-standing) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  row-gap: 0;
+  padding-inline-end: 0;
+}
+#bracket-view .cell .district-standing { grid-column: 1 / -1; justify-self: end; }
 #bracket-view .cell .who .name {
   min-height: 25px;
   white-space: normal;

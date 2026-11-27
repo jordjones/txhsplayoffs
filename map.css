@@ -144,10 +144,11 @@
 .pop-status.upcoming, .pop-status.alive { color: #1e63b5; }
 .pop-status.out { color: var(--muted, #4a5b6a); }
 .pop-teams div {
-  display: flex; justify-content: space-between; gap: 12px; padding: 6px 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; padding: 6px 0;
   border-top: 1px solid var(--line, #c9d2da); font-size: 1.1rem;
 }
-.pop-teams .district-standing { display: flex; }
+.pop-status:has(+ .pop-teams) { text-align: right; }
+.pop-teams .district-standing { grid-column: 1 / -1; justify-self: end; }
 .pop-teams b { font-size: 1.3rem; min-width: 2ch; text-align: right; }
 .pop-teams .won { color: var(--win, #0b5d2a); font-weight: 800; }
 .pop-travel { margin-top: 8px !important; }

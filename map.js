@@ -567,7 +567,7 @@
     return `<p class="pop-crumb">${ui.scope === "all" ? esc(b.label) + " · " : ""}${esc(g.round)}</p>
       <p class="pop-where"><b>${esc(P().where(g))}</b>${loose ? "<small>Marker is at the town, not the stadium.</small>" : ""}</p>
       <p class="pop-status ${st}">${esc(statusWord(it))}</p>
-      <div class="pop-teams">${g.teams.map((s, i) => `<div class="${i === w ? "won" : ""}"><span>${esc(slotName(s))}${P().districtStanding(s.id)}</span><b>${esc(scoreOf(it, i))}</b></div>`).join("")}</div>
+      <div class="pop-teams">${g.teams.map((s, i) => `<div class="${i === w ? "won" : ""}"><span>${esc(slotName(s))}</span><b>${esc(scoreOf(it, i))}</b>${P().districtStanding(s.id)}</div>`).join("")}</div>
       ${trip.length ? `<p class="pop-travel">${trip.join("<br>")}</p>` : ""}
       <div class="pop-actions">
         <button class="btn" type="button" data-game="${esc(g.id)}">Full details</button>
