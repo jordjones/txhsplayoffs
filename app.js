@@ -402,10 +402,13 @@ function renderRounds(b) {
   const regional = !b || state.round === "live" || !b.stateRounds.includes(state.round);
   let list = state.round === "all" ? games : games.filter((g) => g.round === state.round);
   if (state.round === "live") list = live;
+  const now = nowWall();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const playsToday = (g) => g.kickoff?.slice(0, 10) === today;
   if (state.round === "current") {
     list = competitions.flatMap((competition) => {
       const round = defaultRound(competition);
-      return competition.games.filter((g) => g.round === round && known(g));
+      return competition.games.filter((g) => (g.round === round || playsToday(g)) && known(g)); // today's results stay once their round is complete
     });
   }
   const present = REGIONS.filter((r) => list.some((g) => g.region === r));
@@ -417,9 +420,9 @@ function renderRounds(b) {
       present.map((r) => `<button type="button" data-region="${r}" ${current(r === state.region)}>Region ${r}${liveDot(list.filter((g) => g.region === r && status(g) === "live").length)}</button>`).join("");
     if (state.region !== "all") list = list.filter((g) => g.region === state.region);
   }
-  const now = nowWall();
-  const groups = { live: [], upcoming: [], final: [] };
-  list.forEach((g) => groups[status(g)].push(g));
+  const groups = { live: [], today: [], upcoming: [], final: [] };
+  list.forEach((g) => groups[status(g) !== "live" && playsToday(g) ? "today" : status(g)].push(g));
+  groups.today.sort((x, y) => y.final - x.final); // scores first, then score pending
   const competitionSections = Object.fromEntries(competitions.map((competition) => [competition.code, new Set(competition.games)]));
   const cards = (games) => `<div class="game-cards">${games.map((g) => gameCard(g, now)).join("")}</div>`;
   const displayGames = (games) => b ? cards(games) : competitions.map(({ code, label }) => {
@@ -428,6 +431,7 @@ function renderRounds(b) {
   }).join("");
   const labels = {
     live: "Live now",
+    today: "Today's games",
     upcoming: groups.upcoming.some((g) => kickoffPassed(g, now)) ? "Upcoming or score pending" : "Upcoming",
     final: "Final",
   };
